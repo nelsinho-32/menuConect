@@ -1,8 +1,44 @@
 {
   "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "baseUrl": "./src",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["*"],
+      "components/*": ["components/*"],
+      "views/*": ["views/*"],
+      "assets/*": ["assets/*"],
+      "store/*": ["store/*"],
+      "router/*": ["router/*"],
+      "utils/*": ["utils/*"],
+      "composables/*": ["composables/*"],
+      "plugins/*": ["plugins/*"],
+      "services/*": ["services/*"],
+      "directives/*": ["directives/*"],
+      "mixins/*": ["mixins/*"],
+      "types/*": ["types/*"]
     }
   },
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.tsx",
+    "src/**/*.js",
+    "src/**/*.vue"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    "public",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts",
+    "src/components/icons/IconCommunity.vue",
+    "src/components/icons/IconDocumentation.vue",
+    "src/components/icons/IconEcosystem.vue",
+    "src/components/icons/IconSupport.vue",
+    "src/components/icons/IconTooling.vue"
+  ]
 }
