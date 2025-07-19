@@ -51,6 +51,8 @@ const viewState = reactive({
   data: null 
 });
 
+const previousViewState = ref('home'); // Para a lógica de "voltar"
+
 const userReservations = reactive({
   bookedTable: null,
   waitingForTable: null,
@@ -225,9 +227,16 @@ const orderNowFromAction = ({ dish, quantity }) => {
 };
 
 const goToView = (name, data = null) => {
+    if (viewState.name !== name) {
+        previousViewState.value = viewState.name;
+    }
     viewState.name = name;
     viewState.data = data;
     window.scrollTo(0, 0);
+};
+
+const goBack = () => {
+    goToView(previousViewState.value || 'home');
 };
 
 const handleDineInOrTakeout = (dish) => {
@@ -349,7 +358,7 @@ const handleSearchNavigation = (item) => {
           v-if="viewState.name === 'reservation'"
           :restaurant="viewState.data"
           :user-reservations="userReservations"
-          @back-to-main="goToView('main')"
+          @back="goBack"
           @book-table="handleBooking"
           @join-waitlist="handleWaitingList"
           @cancel-reservation="handleCancellation('booked')"
@@ -357,20 +366,20 @@ const handleSearchNavigation = (item) => {
       <RestaurantDetailView
           v-if="viewState.name === 'restaurantDetail'"
           :restaurant="viewState.data"
-          @back-to-main="goToView('main')"
+          @back="goBack"
           @open-action-modal="openActionModal"
       />
       <MyReservationsView
           v-if="viewState.name === 'myReservations'"
           :reservations="userReservations"
           @cancel-reservation="handleCancellation"
-          @back-to-main="goToView('main')"
+          @back="goBack"
       />
       <UserProfileView
           v-if="viewState.name === 'userProfile'"
           :user="userProfile"
           @update-user="handleUpdateUser"
-          @back-to-main="goToView('main')"
+          @back="goBack"
       />
       <CartView
           v-if="viewState.name === 'cart'"
@@ -379,7 +388,7 @@ const handleSearchNavigation = (item) => {
           @update-quantity="updateQuantity"
           @remove-from-cart="removeFromCart"
           @add-to-cart="addToCart"
-          @back-to-main="goToView('main')"
+          @back="goBack"
           @checkout="openCheckout"
       />
       
