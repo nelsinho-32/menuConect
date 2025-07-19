@@ -25,3 +25,4 @@ defineProps({
 });
 defineEmits(['closeModal', 'dineIn', 'takeout', 'reserve']);
 </script>
+
