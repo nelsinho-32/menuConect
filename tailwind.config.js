@@ -2,7 +2,7 @@
 export default {
   content: [
     "./index.html",
-    "./src/**/*.{vue,js,ts,jsx,tsx}", // Essencial para o Tailwind funcionar
+    "./src/**/*.{vue,js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {},
