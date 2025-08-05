@@ -18,6 +18,8 @@ import ActionModal from './components/ActionModal.vue';
 import PaymentModal from './components/PaymentModal.vue';
 import ConfirmationModal from './components/ConfirmationModal.vue';
 import DineOptionsModal from './components/DineOptionsModal.vue';
+import AddRestaurantModal from './components/AddRestaurantModal.vue';
+import AddDishModal from './components/AddDishModal.vue';
 
 // Importando imagens para os restaurantes E PRATOS
 import TerracoLisboa from '@/assets/images/TerracoLisboa.webp';
@@ -45,6 +47,8 @@ const currentDishForAction = ref(null);
 const isToastVisible = ref(false);
 const toastMessage = ref('');
 const paymentShortcut = ref(null);
+const isAddRestaurantModalOpen = ref(false);
+const isAddDishModalOpen = ref(false);
 
 const viewState = reactive({
   name: 'home', 
@@ -58,6 +62,7 @@ const userReservations = reactive({
   waitingForTable: null,
 });
 
+
 const userProfile = reactive({
     name: 'Nelsinho',
     email: 'nelsinho@email.com',
@@ -70,49 +75,7 @@ const isConfirmationModalOpen = ref(false);
 const confirmationModalMessage = ref('');
 
 // --- DADOS GLOBAIS ---
-const restaurants = reactive([
-    { 
-        id: 1, 
-        name: "Terraço Lisboa Bistrô e Café", 
-        cuisine: "Bistrô & Café", 
-        imageUrl: TerracoLisboa,
-        logoUrl: LogoLisboa,
-        galleryUrls: [VistaPrincipalLisboa, TerracoLisboaNoite, TerracoLisboa],
-        menu: [
-            { id: 101, category: 'Entradas', name: 'Bruschetta Clássica', description: 'Pão italiano, tomate fresco, alho e manjericão.', price: 25.00, imageUrl: PratoPrincipalLisboa },
-            { id: 201, category: 'Prato Principal', name: 'Spaghetti Carbonara', description: 'Massa italiana com pancetta, ovos e queijo pecorino.', price: 55.00, imageUrl: PratoPrincipalLisboa },
-            { id: 301, category: 'Sobremesas', name: 'Tiramisù', description: 'Clássica sobremesa italiana com café e mascarpone.', price: 28.00, imageUrl: PratoPrincipalLisboa },
-            { id: 401, category: 'Bebidas', name: 'Vinho Tinto (Taça)', description: 'Seleção do sommelier.', price: 22.00, imageUrl: PratoPrincipalLisboa },
-        ]
-    },
-    { 
-        id: 2, 
-        name: "Bruttão Burger Bananeiras", 
-        cuisine: "Hamburgueria", 
-        imageUrl: BruttaoBurguerBeco,
-        logoUrl: BruttaoLogo,
-        galleryUrls: [BruttaoLocal, BruttaoBurguerBeco],
-        menu: [
-            { id: 103, category: 'Entradas', name: 'Batata Frita com Cheddar e Bacon', description: 'Porção generosa de batatas crocantes com muito cheddar e bacon.', price: 22.00, imageUrl: BurguerBruttao },
-            { id: 204, category: 'Hambúrgueres', name: 'Bruttão Clássico', description: 'Pão brioche, 180g de carne, queijo prato, alface, tomate e molho da casa.', price: 32.00, imageUrl: BurguerBruttao },
-            { id: 205, category: 'Hambúrgueres', name: 'Bruttão Duplo Bacon', description: 'Pão brioche, 2x 180g de carne, dobro de queijo e muito bacon.', price: 45.00, imageUrl: BurguerBruttao },
-            { id: 303, category: 'Sobremesas', name: 'Milk-shake de Ovomaltine', description: 'Cremoso e irresistível, com 500ml.', price: 20.00, imageUrl: BurguerBruttao },
-            { id: 403, category: 'Bebidas', name: 'Refrigerante Lata', description: '350ml.', price: 8.00, imageUrl: BurguerBruttao },
-        ]
-    },
-    { 
-        id: 3, 
-        name: "Açaiteria", 
-        cuisine: "Açaí & Lanches", 
-        imageUrl: AcaiteriaImg,
-        logoUrl: AcaiteriaImg,
-        galleryUrls: [AcaiteriaImg],
-        menu: [
-           { id: 206, category: 'Açaí', name: 'Copo de Açaí 500ml', description: 'Açaí puro com banana, granola e leite condensado.', price: 25.00, imageUrl: AcaiComMorango },
-           { id: 404, category: 'Bebidas', name: 'Suco de Laranja Natural', description: 'Feito na hora, 400ml.', price: 10.00, imageUrl: AcaiComMorango },
-        ]
-    }
-]);
+const restaurants = reactive([]);
 
 const trendingDishes = computed(() => [
     { id: 204, restaurantName: "Bruttão Burger Bananeiras", dishName: "Bruttão Clássico", price: "32.00", imageUrl: BurguerBruttao },
@@ -143,6 +106,31 @@ const searchableItems = computed(() => {
     });
     return items;
 });
+
+// Esta propriedade irá conter apenas os restaurantes que não foram adicionados pelo utilizador.
+const featuredRestaurants = computed(() => restaurants.filter(r => !r.isNew));
+
+// --- FUNÇÕES DE PERSISTÊNCIA (LOCAL STORAGE) PARA RESTAURANTES ---
+const saveRestaurantsToLocalStorage = () => {
+    localStorage.setItem('menuConnectRestaurants', JSON.stringify(restaurants));
+};
+
+const loadRestaurantsFromLocalStorage = () => {
+    const savedRestaurants = localStorage.getItem('menuConnectRestaurants');
+    if (savedRestaurants) {
+        restaurants.push(...JSON.parse(savedRestaurants));
+    } else {
+        // Dados iniciais
+        const initialRestaurants = [
+            { id: 1, name: "Terraço Lisboa Bistrô e Café", cuisine: "Bistrô & Café", imageUrl: '/src/assets/images/TerracoLisboa.webp', logoUrl: '/src/assets/images/LogoLisboa.png', galleryUrls: ['/src/assets/images/VistaPrincipalLisboa.jpg', '/src/assets/images/TerracoLisboaNoite.jpg'], menu: [/*...menu...*/], isNew: false },
+            { id: 2, name: "Bruttão Burger Bananeiras", cuisine: "Hamburgueria", imageUrl: '/src/assets/images/BruttaoBurguerBeco.jpg', logoUrl: '/src/assets/images/BruttaoLogo.png', galleryUrls: ['/src/assets/images/BruttaoLocal.jpg'], menu: [/*...menu...*/], isNew: false },
+            { id: 3, name: "Açaiteria", cuisine: "Açaí & Lanches", imageUrl: '/src/assets/images/Acaiteria.jpg', logoUrl: '/src/assets/images/Acaiteria.jpg', galleryUrls: [], menu: [/*...menu...*/], isNew: false }
+        ];
+        restaurants.push(...initialRestaurants);
+    }
+};
+loadRestaurantsFromLocalStorage();
+
 
 // --- MÉTODOS ---
 const showToast = (message) => {
@@ -310,6 +298,71 @@ const handleSearchNavigation = (item) => {
         }
     }
 };
+
+// 3. Adicionar novas funções para controlar a modal e adicionar o restaurante
+const openAddRestaurantModal = () => {
+    isAddRestaurantModalOpen.value = true;
+};
+
+const closeAddRestaurantModal = () => {
+    isAddRestaurantModalOpen.value = false;
+};
+
+const handleAddRestaurant = (newRestaurantData) => {
+    const newId = (restaurants.length > 0 ? Math.max(...restaurants.map(r => r.id)) : 0) + 1;
+
+    const restaurantToAdd = {
+        id: newId,
+        ...newRestaurantData,
+        menu: [],
+        isNew: true // 2. ADICIONA A FLAG "isNew" AO NOVO RESTAURANTE
+    };
+    
+    restaurants.push(restaurantToAdd);
+    saveRestaurantsToLocalStorage();
+    closeAddRestaurantModal();
+    showToast(`Restaurante '${newRestaurantData.name}' adicionado com sucesso!`);
+};
+
+const openAddDishModal = () => {
+    isAddDishModalOpen.value = true;
+};
+
+const closeAddDishModal = () => {
+    isAddDishModalOpen.value = false;
+};
+
+const handleAddDish = (newDishData) => {
+    // Encontra o restaurante ao qual o prato pertence
+    const parentRestaurant = restaurants.find(r => r.name === newDishData.restaurantName);
+    if (!parentRestaurant) {
+        showToast(`Erro: Restaurante '${newDishData.restaurantName}' não encontrado.`);
+        return;
+    }
+
+    // Cria um novo ID único para o prato
+    const newDishId = (allDishes.value.length > 0 ? Math.max(...allDishes.value.map(d => d.id)) : 0) + 1;
+
+    const dishToAdd = {
+        id: newDishId,
+        restaurantName: parentRestaurant.name,
+        restaurantId: parentRestaurant.id,
+        dishName: newDishData.dishName,
+        price: parseFloat(newDishData.price),
+        imageUrl: newDishData.imageUrl,
+        // Pode adicionar mais campos como 'category' e 'description' aqui
+        category: 'Novidades',
+        description: 'Um novo prato delicioso adicionado por si.'
+    };
+    
+    // Adiciona o novo prato ao menu do restaurante correspondente
+    parentRestaurant.menu.push(dishToAdd);
+    
+    saveRestaurantsToLocalStorage(); // Salva toda a estrutura de restaurantes atualizada
+    closeAddDishModal();
+    
+    showToast(`Prato '${newDishData.dishName}' adicionado com sucesso!`);
+};
 </script>
 
 <template>
@@ -324,8 +377,7 @@ const handleSearchNavigation = (item) => {
         />
         <HomeView
             v-if="viewState.name === 'home'"
-            :restaurants="restaurants"
-            :trending-dishes="trendingDishes"
+            :restaurants="featuredRestaurants" :trending-dishes="trendingDishes"
             :frequent-dishes="frequentDishes"
             :favorite-dishes="favoriteDishes"
             :favorite-restaurants="favoriteRestaurants"
@@ -340,11 +392,11 @@ const handleSearchNavigation = (item) => {
         />
         <RestaurantsView
             v-if="viewState.name === 'restaurants'"
-            :restaurants="restaurants"
-            :favorite-restaurants="favoriteRestaurants"
+            :restaurants="restaurants" :favorite-restaurants="favoriteRestaurants"
             @toggle-favorite="toggleRestaurantFavorite"
             @request-reservation="restaurant => goToView('reservation', restaurant)"
             @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)"
+            @open-add-restaurant-modal="openAddRestaurantModal"
         />
         <DishesView
             v-if="viewState.name === 'dishes'"
@@ -353,6 +405,7 @@ const handleSearchNavigation = (item) => {
             @open-action-modal="openActionModal"
             @open-dine-options="openDineOptionsModal"
             @toggle-favorite="toggleDishFavorite"
+            @open-add-dish-modal="openAddDishModal"
         />
         <ReservationView
             v-if="viewState.name === 'reservation'"
@@ -393,6 +446,18 @@ const handleSearchNavigation = (item) => {
         />
         
         <Footer />
+
+        <AddRestaurantModal 
+            v-if="isAddRestaurantModalOpen" 
+            @close="closeAddRestaurantModal" 
+            @add-restaurant="handleAddRestaurant" 
+        />
+        <AddDishModal
+            v-if="isAddDishModalOpen"
+            :restaurants="restaurants"
+            @close="closeAddDishModal"
+            @add-dish="handleAddDish"
+        />
         <ActionModal v-if="isActionModalOpen" :dish="currentDishForAction" @close-modal="closeActionModal" @add-to-cart="addToCart" @order-now="orderNowFromAction" />
         <DineOptionsModal v-if="isDineOptionsModalOpen" :dish="currentDishForAction" @close-modal="closeDineOptionsModal" @dine-in="handleDineInOrTakeout" @takeout="handleDineInOrTakeout" @reserve="handleGoToReservation" />
         <PaymentModal v-if="isPaymentModalOpen" :cart="cart" :shortcut="paymentShortcut" @close-modal="closePaymentModal" />
