@@ -67,7 +67,7 @@ const userReservations = reactive({
 const userProfile = reactive({
     name: 'Nelsinho',
     email: 'nelsinho@email.com',
-    phone: '+351 912 345 678',
+    phone: '+83 99692-1055',
     avatarUrl: 'https://placehold.co/256x256/6366f1/ffffff?text=N',
     preferences: ['Italiana', 'Hamburgueria', 'Japonesa']
 });
