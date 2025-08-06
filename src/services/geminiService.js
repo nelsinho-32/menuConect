@@ -4,11 +4,11 @@ export async function callGemini(prompt, schema) {
     //
     // Certifique-se de que a sua chave de API está colada aqui
     //
-    const apiKey = "AIzaSyDfP9J9VfBqjiJvgtNvjl4d3Bh3ElUc6Yc";
+    const apiKey = "AIzaSyB6nLlo2nZe9vhFEs5DeqaC1OyQ1f_dBQo";
     //
     //
 
-    if (!apiKey || apiKey === "AIzaSyDfP9J9VfBqjiJvgtNvjl4d3Bh3ElUc6Yc") {
+    if (!apiKey || apiKey === "AIzaSyB6nLlo2nZe9vhFEs5DeqaC1OyQ1f_dBQo") {
         console.error("A chave da API da Gemini não foi definida em geminiService.js.");
         // Rejeita a promessa para que o componente possa apanhar o erro
         return Promise.reject("A chave da API da Gemini não está configurada.");

@@ -2,7 +2,6 @@
   <header class="bg-white shadow-sm sticky top-0 z-40">
     <div class="container mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between items-center py-2">
-        <!-- Esquerda: Menu Hambúrguer, Logo -->
         <div class="flex items-center gap-2">
           <div class="relative" ref="menuContainerRef">
             <button @click="isMenuOpen = !isMenuOpen" class="p-2 rounded-full hover:bg-gray-100">
@@ -25,19 +24,17 @@
               </a>
             </div>
           </div>
-          <button @click="navigate('home')" class="flex items-center space-x-2 flex-shrink-0">
-            <h1 class="text-2xl font-bold text-gray-900">Menu <span class="brand-text">Connect</span></h1>
+          <button @click="navigate('home')" class="flex-shrink-0">
+            <img :src="logo" alt="Menu Connect Logo" class="h-12 w-auto">
           </button>
         </div>
 
-        <!-- Centro: Navegação Principal (Desktop) -->
         <nav class="hidden lg:flex items-center gap-6">
             <button @click="navigate('home')" :class="['font-semibold', activeView === 'home' ? 'text-indigo-600' : 'text-gray-600 hover:text-indigo-600']">Home</button>
             <button @click="navigate('restaurants')" :class="['font-semibold', activeView === 'restaurants' ? 'text-indigo-600' : 'text-gray-600 hover:text-indigo-600']">Restaurantes</button>
             <button @click="navigate('dishes')" :class="['font-semibold', activeView === 'dishes' ? 'text-indigo-600' : 'text-gray-600 hover:text-indigo-600']">Comidas</button>
         </nav>
         
-        <!-- Direita: Pesquisa, Ícones -->
         <div class="flex items-center gap-4">
           <div class="relative w-full max-w-xs hidden md:block" ref="searchContainerRef">
               <input type="text" v-model="searchQuery" @focus="isSearchFocused = true" placeholder="Buscar..." class="w-full bg-gray-100 border border-gray-200 rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -71,13 +68,31 @@
                 </div>
             </div>
           </div>
+
+          <div class="flex items-center gap-2 rounded-full bg-gray-100 p-1 text-sm border">
+              <button
+                  @click="userStore.setUserRole('cliente')"
+                  :class="[userStore.userRole === 'cliente' ? 'bg-indigo-600 text-white shadow' : 'text-gray-600', 'px-3 py-1 rounded-full font-semibold transition-all']">
+                  Cliente
+              </button>
+              <button
+                  @click="userStore.setUserRole('empresa')"
+                  :class="[userStore.userRole === 'empresa' ? 'bg-indigo-600 text-white shadow' : 'text-gray-600', 'px-3 py-1 rounded-full font-semibold transition-all']">
+                  Empresa
+              </button>
+          </div>
         </div>
       </div>
     </div>
   </header>
 </template>
+
 <script setup>
+import { useUserStore } from '@/stores/userStore';
 import { ref, watch, onBeforeUnmount, computed, onMounted } from 'vue';
+import logo from '@/assets/images/LogoMarcaMenu.png';
+
+const userStore = useUserStore();
 
 const props = defineProps({
   cartItemCount: { type: Number, default: 0 },
@@ -101,7 +116,7 @@ const navigate = (viewName) => {
 const filteredResults = computed(() => {
     if (searchQuery.value.length < 2) return [];
     const lowerCaseQuery = searchQuery.value.toLowerCase();
-    return props.searchableItems.filter(item => 
+    return props.searchableItems.filter(item =>
         (item.name && item.name.toLowerCase().includes(lowerCaseQuery)) ||
         (item.dishName && item.dishName.toLowerCase().includes(lowerCaseQuery))
     );

@@ -2,7 +2,6 @@
     <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <button @click="$emit('backToMain')" class="mb-6 text-indigo-600 font-semibold hover:underline">&lt; Voltar</button>
 
-        <!-- Hero Section com Galeria -->
         <div class="mb-8">
             <div class="h-96 flex gap-2 rounded-2xl overflow-hidden">
                 <div class="w-1/3 h-full bg-gray-100 flex items-center justify-center">
@@ -21,11 +20,6 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
                             </button>
                         </div>
-                        <div class="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
-                            <button v-for="(image, index) in carouselImages" :key="index" @click="currentImageIndex = index"
-                                    :class="['w-3 h-3 rounded-full', currentImageIndex === index ? 'bg-white' : 'bg-white/50']">
-                            </button>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -34,24 +28,40 @@
 
         <AIEncontroSection :restaurant="restaurant" />
 
-        <RestaurantMenu :menu="restaurant.menu" @open-action-modal="dish => $emit('openActionModal', dish)" />
+        <RestaurantMenu 
+            :menu="restaurant.menu" 
+            @open-action-modal="dish => $emit('openActionModal', dish)" 
+            @open-add-menu-item-modal="category => $emit('openAddDishModal', { restaurant, category })"
+        />
 
     </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import AIEncontroSection from  './sections/AIEncontroSection.vue';
 import RestaurantMenu from './RestaurantMenu.vue';
 
 const props = defineProps({
     restaurant: { type: Object, required: true }
 });
-defineEmits(['backToMain', 'openActionModal']);
+
+// O evento 'openAddDishModal' é agora re-emitido para o App.vue com os dados necessários
+defineEmits(['backToMain', 'openActionModal', 'openAddDishModal']);
 
 const carouselImages = ref([]);
 const currentImageIndex = ref(0);
 const currentImage = computed(() => carouselImages.value[currentImageIndex.value]);
+    
+
+const setupCarousel = () => {
+    if (props.restaurant) {
+        // Garante que a imagem principal está sempre primeiro e evita duplicados
+        const images = new Set([props.restaurant.imageUrl, ...(props.restaurant.galleryUrls || [])]);
+        carouselImages.value = Array.from(images);
+        currentImageIndex.value = 0;
+    }
+};
 
 const nextImage = () => {
     currentImageIndex.value = (currentImageIndex.value + 1) % carouselImages.value.length;
@@ -60,13 +70,10 @@ const prevImage = () => {
     currentImageIndex.value = (currentImageIndex.value - 1 + carouselImages.value.length) % carouselImages.value.length;
 };
 
-onMounted(() => {
-    if (props.restaurant && props.restaurant.galleryUrls) {
-        carouselImages.value = [props.restaurant.imageUrl, ...props.restaurant.galleryUrls];
-    } else {
-        carouselImages.value = [props.restaurant.imageUrl];
-    }
-});
+onMounted(setupCarousel);
+// Garante que o carrossel é atualizado se o restaurante mudar
+watch(() => props.restaurant, setupCarousel);
+
 </script>
 
 <style scoped>

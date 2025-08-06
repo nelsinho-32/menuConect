@@ -3,7 +3,10 @@
         <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl">
             <div class="p-6 border-b">
                 <h3 class="text-2xl font-bold text-gray-800">Adicionar Novo Prato</h3>
-                <p class="text-gray-500">Preencha os dados do novo item do cardápio.</p>
+                <p v-if="restaurant" class="text-gray-500">
+                    Novo item para <span class="font-semibold text-indigo-600">{{ restaurant.name }}</span>
+                </p>
+                <p v-else class="text-gray-500">Preencha os dados do novo item do cardápio.</p>
             </div>
 
             <form @submit.prevent="handleSubmit" class="p-6 space-y-4">
@@ -13,19 +16,29 @@
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
+                    <div v-if="!restaurant">
                         <label for="restaurantName" class="block text-sm font-medium text-gray-700">Restaurante</label>
                         <select id="restaurantName" v-model="newDish.restaurantName" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                             <option disabled value="">Selecione um restaurante</option>
-                            <option v-for="restaurant in restaurants" :key="restaurant.id" :value="restaurant.name">
-                                {{ restaurant.name }}
+                            <option v-for="res in allRestaurants" :key="res.id" :value="res.name">
+                                {{ res.name }}
                             </option>
                         </select>
                     </div>
+                    
                     <div>
-                        <label for="price" class="block text-sm font-medium text-gray-700">Preço</label>
-                        <input type="number" step="0.01" id="price" v-model="newDish.price" required placeholder="Ex: 25.50" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <label for="category" class="block text-sm font-medium text-gray-700">Categoria</label>
+                        <select id="category" v-model="newDish.category" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <option>Entradas</option>
+                            <option>Prato Principal</option>
+                            <option>Sobremesas</option>
+                            <option>Bebidas</option>
+                        </select>
                     </div>
+                </div>
+                 <div>
+                    <label for="price" class="block text-sm font-medium text-gray-700">Preço</label>
+                    <input type="number" step="0.01" id="price" v-model="newDish.price" required placeholder="Ex: 25.50" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
                 
                 <div>
@@ -50,10 +63,12 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue';
+import { reactive, onMounted } from 'vue';
 
 const props = defineProps({
-    restaurants: { type: Array, required: true }
+    allRestaurants: { type: Array, required: true },
+    restaurant: { type: Object, default: null },
+    category: { type: String, default: 'Entradas' }
 });
 
 const emit = defineEmits(['close', 'addDish']);
@@ -63,6 +78,14 @@ const newDish = reactive({
     restaurantName: '',
     price: '',
     imageUrl: '',
+    category: ''
+});
+
+onMounted(() => {
+    if (props.restaurant) {
+        newDish.restaurantName = props.restaurant.name;
+    }
+    newDish.category = props.category;
 });
 
 const handleImageUpload = (event) => {

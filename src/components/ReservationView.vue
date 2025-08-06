@@ -8,10 +8,10 @@
                 <p class="text-gray-500">Selecione uma mesa no mapa abaixo ou edite a disposição.</p>
             </div>
             <div class="flex flex-wrap gap-2">
-                <button v-if="!isEditMode" @click="toggleEditMode" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">
+                <button v-if="!isEditMode && userStore.isCompanyUser()" @click="toggleEditMode" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">
                     ✏️ Editar Mapa
                 </button>
-                <template v-else>
+                <template v-if="isEditMode">
                     <button @click="cycleFloorPattern" class="bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600">
                         🎨 Mudar Chão
                     </button>
@@ -28,7 +28,7 @@
         <div v-if="isEditMode" class="bg-gray-100 p-4 rounded-lg mb-4 flex items-center gap-4 border border-gray-200">
             <h3 class="font-bold text-gray-700">Adicionar ao Mapa:</h3>
             <div class="flex gap-3">
-                <div v-for="tool in toolbox" :key="tool.label" 
+                <div v-for="tool in toolbox" :key="tool.label"
                      :title="`Arrastar ${tool.label}`"
                      class="toolbox-item bg-white p-2 rounded shadow-sm border cursor-grab text-center flex flex-col items-center justify-center w-20 h-20"
                      draggable="true"
@@ -58,8 +58,8 @@
                 </defs>
 
                 <rect width="100%" height="100%" :fill="`url(#${selectedFloorPatternId})`" />
-                
-                <g v-for="element in mapElements" :key="element.id" 
+
+                <g v-for="element in mapElements" :key="element.id"
                    @mousedown.left="isEditMode ? startDrag($event, element) : null"
                    class="group relative"
                    :class="{'draggable-item': isEditMode}"
@@ -70,7 +70,7 @@
                          <svg width="20" height="20" viewBox="0 0 16 16" :fill="element.textColor" x="-10" y="-10" v-html="element.icon_svg"></svg>
                     </g>
                     <text :x="element.x + element.width / 2" :y="element.y + element.height - 5" text-anchor="middle" font-size="8" :fill="element.textColor" class="font-semibold pointer-events-none">{{ element.label }}</text>
-                    
+
                     <g v-if="isEditMode" class="opacity-0 group-hover:opacity-100 transition-opacity">
                         <line :x1="element.x + element.width / 2" :y1="element.y + element.height / 2" :x2="element.x + element.width / 2" :y2="element.y - 15" stroke="#3b82f6" stroke-width="2" />
                         <circle :cx="element.x + element.width / 2" :cy="element.y - 15" r="5" fill="#3b82f6" @mousedown.stop="startRotate($event, element)" class="cursor-alias" />
@@ -78,11 +78,11 @@
                         <text :x="element.x + element.width + 5" :y="element.y - 2" class="pointer-events-none" text-anchor="middle" fill="white" font-size="10">X</text>
                     </g>
                 </g>
-                
-                <g v-for="table in tables" :key="table.id" 
-                   @click="isEditMode ? null : selectTable(table)" 
-                   @mousedown.left="isEditMode ? startDrag($event, table) : null" 
-                   class="group relative" 
+
+                <g v-for="table in tables" :key="table.id"
+                   @click="isEditMode ? null : selectTable(table)"
+                   @mousedown.left="isEditMode ? startDrag($event, table) : null"
+                   class="group relative"
                    :class="{'draggable-item': isEditMode, 'cursor-pointer': !isEditMode}"
                    filter="url(#dropShadow)">
                     <rect :x="table.x" :y="table.y" :width="table.width" :height="table.height" :rx="table.shape === 'round' ? '50%' : '3'" :fill="getTableColor(table)"/>
@@ -90,26 +90,26 @@
                 </g>
             </svg>
         </div>
-        
-        <TableActionModal 
-            v-if="selectedTable && isActionModalOpen" 
-            :table="selectedTable" 
+
+        <TableActionModal
+            v-if="selectedTable && isActionModalOpen"
+            :table="selectedTable"
             :user-reservations="userReservations"
-            @close="isActionModalOpen = false" 
-            @book="openBookingView" 
+            @close="isActionModalOpen = false"
+            @book="openBookingView"
             @join-waitlist="joinWaitlist"
             @cancel="cancelReservation"
             @viewTable="openTableView"
             @openConfig="openTableConfig"
         />
-        <BookingModal 
-            v-if="selectedTable && isBookingModalOpen" 
-            :table="selectedTable" 
-            :restaurant="restaurant" 
-            @close="isBookingModalOpen = false" 
-            @confirm-booking="confirmBooking" 
+        <BookingModal
+            v-if="selectedTable && isBookingModalOpen"
+            :table="selectedTable"
+            :restaurant="restaurant"
+            @close="isBookingModalOpen = false"
+            @confirm-booking="confirmBooking"
         />
-        <TableViewModal 
+        <TableViewModal
             v-if="selectedTable && isTableViewModalOpen"
             :tableId="selectedTable.id"
             :images="selectedTable.images"
@@ -126,6 +126,7 @@
 
 <script setup>
 import { ref, reactive } from 'vue';
+import { useUserStore } from '@/stores/userStore';
 import TableActionModal from './TableActionModal.vue';
 import BookingModal from './BookingModal.vue';
 import TableViewModal from './TableViewModal.vue';
@@ -133,6 +134,8 @@ import TableConfigModal from './TableConfigModal.vue';
 
 const props = defineProps({ restaurant: Object, userReservations: Object });
 const emit = defineEmits(['backToMain', 'bookTable', 'joinWaitlist', 'cancelReservation']);
+
+const userStore = useUserStore();
 
 const icons = {
     bar: `<path d="M12.5 1a1 1 0 0 1 1 1v5.333a2.5 2.5 0 0 1-5 0V2a1 1 0 0 1 1-1h3zm-.5 4.333V2H9.5v3.333a1.5 1.5 0 0 0 3 0z"/><path d="M13 12.5a1 1 0 0 1 1-1h.5a1 1 0 0 1 0 2h-.5a1 1 0 0 1-1-1zm-10 0a1 1 0 0 1 1-1h.5a1 1 0 0 1 0 2H4a1 1 0 0 1-1-1zM5 6a1 1 0 0 1 1-1h5a1 1 0 0 1 0 2H6a1 1 0 0 1-1-1z"/>`,
