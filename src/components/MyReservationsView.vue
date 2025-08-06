@@ -8,22 +8,29 @@
         </div>
 
         <div v-else class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-            <!-- Coluna da Reserva Ativa -->
             <div>
                 <h2 class="text-2xl font-bold mb-4 text-gray-800">Sua Próxima Reserva</h2>
                 <div v-if="reservations.bookedTable">
-                    <ReservationCard :reservation="reservations.bookedTable" type="booked" @cancel="type => $emit('cancelReservation', type)" />
+                    <ReservationCard 
+                        :reservation="reservations.bookedTable" 
+                        type="booked" 
+                        @cancel="type => $emit('cancelReservation', type)"
+                        @confirm="reservation => $emit('confirmReservation', reservation)"
+                    />
                 </div>
                 <div v-else class="bg-white p-6 rounded-lg shadow-md text-center text-gray-400">
                     <p>Nenhuma mesa reservada.</p>
                 </div>
             </div>
 
-            <!-- Coluna da Fila de Espera -->
             <div>
                 <h2 class="text-2xl font-bold mb-4 text-gray-800">Mesa em Fila de Espera</h2>
                 <div v-if="reservations.waitingForTable">
-                    <ReservationCard :reservation="reservations.waitingForTable" type="waiting" @cancel="type => $emit('cancelReservation', type)" />
+                    <ReservationCard 
+                        :reservation="reservations.waitingForTable" 
+                        type="waiting" 
+                        @cancel="type => $emit('cancelReservation', type)" 
+                    />
                 </div>
                  <div v-else class="bg-white p-6 rounded-lg shadow-md text-center text-gray-400">
                     <p>Você não está em nenhuma fila.</p>
@@ -35,8 +42,11 @@
 
 <script setup>
 import ReservationCard from './ReservationCard.vue';
+
 defineProps({
     reservations: { type: Object, required: true }
 });
-defineEmits(['cancelReservation', 'backToMain']);
+
+// AQUI ESTÁ A CORREÇÃO: Adicionado 'confirmReservation'
+defineEmits(['cancelReservation', 'backToMain', 'confirmReservation']);
 </script>

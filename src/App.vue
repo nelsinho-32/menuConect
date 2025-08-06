@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import AppHeader from './components/AppHeader.vue';
 import Footer from './components/Footer.vue';
 
@@ -12,6 +12,8 @@ import ReservationView from './components/ReservationView.vue';
 import MyReservationsView from './components/MyReservationsView.vue';
 import UserProfileView from './components/UserProfileView.vue';
 import CartView from './components/CartView.vue';
+import FavoriteRestaurantsView from './components/views/FavoriteRestaurantsView.vue';
+import FavoriteDishesView from './components/views/FavoriteDishesView.vue';
 
 // Importando componentes de modais
 import ActionModal from './components/ActionModal.vue';
@@ -35,6 +37,10 @@ import BurguerBruttao from '@/assets/images/BurguerBruttao.jpg';
 import AcaiComMorango from '@/assets/images/AcaiComMorango.webp';
 import PaoComRequeijao from '@/assets/images/PaoComRequeijao.jpeg';
 
+// Importando o store do usuário
+import { useEncontroStore } from './stores/encontroStore';
+
+const encontroStore = useEncontroStore();
 
 // --- DADOS REATIVOS ---
 const cart = reactive([]);
@@ -110,29 +116,125 @@ const searchableItems = computed(() => {
 
 const featuredRestaurants = computed(() => restaurants.filter(r => !r.isNew));
 
+// NOVA PROPRIEDADE COMPUTADA para filtrar os restaurantes favoritos
+const favoritedRestaurantsList = computed(() => {
+    return restaurants.filter(restaurant => favoriteRestaurants.has(restaurant.id));
+});
+
+// NOVA PROPRIEDADE COMPUTADA para filtrar os pratos favoritos
+const favoritedDishesList = computed(() => {
+    return allDishes.value.filter(dish => favoriteDishes.has(dish.id));
+});
+
+const getInitialRestaurants = () => [
+    // CORREÇÃO: Adicionada a estrutura de mapa a cada restaurante
+    {
+        id: 1, name: "Terraço Lisboa Bistrô e Café", cuisine: "Bistrô & Café", imageUrl: '/src/assets/images/TerracoLisboa.webp', logoUrl: '/src/assets/images/LogoLisboa.png', galleryUrls: ['/src/assets/images/VistaPrincipalLisboa.jpg', '/src/assets/images/TerracoLisboaNoite.jpg'], menu: [], isNew: false,
+        // Dados do mapa (baseados no ReservationView)
+        mapElements: [ { id: 'bar-1', label: 'BAR', x: 10, y: 10, width: 150, height: 40, fill: '#a8a29e', textColor: '#FFFFFF', rx: 5, rotation: 0, icon_svg: '...' } ],
+        tables: [ { id: 1, x: 50, y: 80, width: 40, height: 40, shape: 'round', status: 'available', images: [] } ],
+        floorPatternId: 'floor-marble'
+    },
+    {
+        id: 2, name: "Bruttão Burger Bananeiras", cuisine: "Hamburgueria", imageUrl: '/src/assets/images/BruttaoBurguerBeco.jpg', logoUrl: '/src/assets/images/BruttaoLogo.png', galleryUrls: ['/src/assets/images/BruttaoLocal.jpg'], menu: [], isNew: false,
+        mapElements: [
+            { id: 'bar-1', label: 'Bar', x: 10, y: 10, width: 150, height: 40, fill: '#a8a29e', textColor: '#FFFFFF', rx: 5, rotation: 0, icon_svg: '<path d="..."/>' },
+            { id: 'kitchen-1', label: 'Cozinha', x: 280, y: 10, width: 110, height: 60, fill: '#e7e5e4', textColor: '#57534e', rx: 5, rotation: 0, icon_svg: '<path d="..."/>' }
+        ], tables: [
+            { id: 1, x: 50, y: 80, width: 40, height: 40, shape: 'round', status: 'available', images: [] },
+            { id: 2, x: 110, y: 80, width: 35, height: 35, shape: 'square', status: 'occupied', images: [] }
+        ], floorPatternId: 'floor-darkwood'
+    },
+    {
+        id: 3, name: "Açaiteria", cuisine: "Açaí & Lanches", imageUrl: '/src/assets/images/Acaiteria.jpg', logoUrl: '/src/assets/images/Acaiteria.jpg', galleryUrls: [], menu: [], isNew: false,
+        mapElements: [], tables: [], floorPatternId: 'floor-tiles'
+    }
+];
+
 // --- FUNÇÕES DE PERSISTÊNCIA (LOCAL STORAGE) PARA RESTAURANTES ---
 const saveRestaurantsToLocalStorage = () => {
     localStorage.setItem('menuConnectRestaurants', JSON.stringify(restaurants));
 };
 
 const loadRestaurantsFromLocalStorage = () => {
+    restaurants.length = 0;
     const savedRestaurants = localStorage.getItem('menuConnectRestaurants');
     if (savedRestaurants) {
         restaurants.push(...JSON.parse(savedRestaurants));
     } else {
-        const initialRestaurants = [
-            { id: 1, name: "Terraço Lisboa Bistrô e Café", cuisine: "Bistrô & Café", imageUrl: '/src/assets/images/TerracoLisboa.webp', logoUrl: '/src/assets/images/LogoLisboa.png', galleryUrls: ['/src/assets/images/VistaPrincipalLisboa.jpg', '/src/assets/images/TerracoLisboaNoite.jpg'], menu: [], isNew: false },
-            { id: 2, name: "Bruttão Burger Bananeiras", cuisine: "Hamburgueria", imageUrl: '/src/assets/images/BruttaoBurguerBeco.jpg', logoUrl: '/src/assets/images/BruttaoLogo.png', galleryUrls: ['/src/assets/images/BruttaoLocal.jpg'], menu: [], isNew: false },
-            { id: 3, name: "Açaiteria", cuisine: "Açaí & Lanches", imageUrl: '/src/assets/images/Acaiteria.jpg', logoUrl: '/src/assets/images/Acaiteria.jpg', galleryUrls: [], menu: [], isNew: false }
-        ];
-        restaurants.push(...initialRestaurants);
+        restaurants.push(...getInitialRestaurants());
     }
     restaurants.forEach(r => {
         if (!r.menu) r.menu = [];
+        // Garante que a estrutura de mapa existe
+        if (!r.mapElements) r.mapElements = [];
+        if (!r.tables) r.tables = [];
+        if (!r.floorPatternId) r.floorPatternId = 'floor-marble';
     });
 };
-loadRestaurantsFromLocalStorage();
 
+onMounted(() => {
+    loadRestaurantsFromLocalStorage();
+    // ... (carregar favoritos)
+});
+
+// INÍCIO: NOVAS FUNÇÕES PARA GUARDAR E CARREGAR FAVORITOS
+const saveFavoritesToLocalStorage = () => {
+    // Converte os Sets para Arrays para poderem ser guardados como JSON
+    localStorage.setItem('menuConnectFavoriteDishes', JSON.stringify(Array.from(favoriteDishes)));
+    localStorage.setItem('menuConnectFavoriteRestaurants', JSON.stringify(Array.from(favoriteRestaurants)));
+};
+
+const loadFavoritesFromLocalStorage = () => {
+    const savedDishIds = localStorage.getItem('menuConnectFavoriteDishes');
+    const savedRestaurantIds = localStorage.getItem('menuConnectFavoriteRestaurants');
+
+    if (savedDishIds) {
+        const dishIds = JSON.parse(savedDishIds);
+        dishIds.forEach(id => favoriteDishes.add(id));
+    }
+    if (savedRestaurantIds) {
+        const restaurantIds = JSON.parse(savedRestaurantIds);
+        restaurantIds.forEach(id => favoriteRestaurants.add(id));
+    }
+};
+
+// Chama as funções de carregamento quando a aplicação é montada
+onMounted(() => {
+    loadRestaurantsFromLocalStorage();
+    loadFavoritesFromLocalStorage();
+});
+// FIM: NOVAS FUNÇÕES PARA FAVORITOS
+
+const handleConfirmEncontro = (encontroData) => {
+    console.log('Encontro confirmado no App.vue!', encontroData);
+    
+    if (encontroData.paymentOption === 'agora') {
+        encontroData.guests.forEach(guest => {
+            Object.values(guest.menu).forEach(itemName => {
+                if(itemName) {
+                    const dish = allDishes.value.find(d => d.name === itemName || d.dishName === itemName);
+                    if (dish) {
+                        addToCart({ dish, quantity: 1 });
+                    }
+                }
+            });
+        });
+        goToView('cart');
+    }
+
+    const restaurant = restaurants.find(r => r.id === encontroData.restaurantId);
+    if (restaurant) {
+        handleBooking({
+            restaurant,
+            table: encontroData.selectedTable,
+            dateTime: new Date(), // Usar data/hora atual como exemplo
+            guests: encontroData.guests.length
+        });
+    }
+
+    encontroStore.cancelPlanning();
+};
 
 // --- MÉTODOS ---
 const showToast = (message) => {
@@ -177,6 +279,8 @@ const toggleDishFavorite = (dish) => {
         favoriteDishes.add(dish.id);
         showToast(`'${dish.dishName}' adicionado aos favoritos!`);
     }
+
+    saveFavoritesToLocalStorage(); // Salva a alteração
 };
 
 const toggleRestaurantFavorite = (restaurant) => {
@@ -187,6 +291,8 @@ const toggleRestaurantFavorite = (restaurant) => {
         favoriteRestaurants.add(restaurant.id);
         showToast(`'${restaurant.name}' adicionado aos favoritos!`);
     }
+
+    saveFavoritesToLocalStorage(); // Salva a alteração
 };
 
 const openActionModal = (dish) => {
@@ -241,13 +347,30 @@ const handleGoToReservation = (dish) => {
     }
 };
 
-const handleBooking = ({ restaurant, table, dateTime }) => {
+const sendWhatsAppConfirmation = (reservationDetails) => {
+    const { restaurant, table, dateTime, guests } = reservationDetails;
+    let phone = userProfile.phone;
+    let cleanedPhone = phone.replace(/\D/g, '');
+    if (cleanedPhone.length <= 11) {
+        cleanedPhone = '55' + cleanedPhone;
+    }
+    const formattedDate = dateTime.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const formattedTime = dateTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const message = `Olá! 👋\n\nSua reserva no *${restaurant.name}* está confirmada!\n\n*Detalhes:*\n- *Mesa:* ${table.id}\n- *Data:* ${formattedDate}\n- *Hora:* ${formattedTime}\n- *Pessoas:* ${guests}\n\nObrigado por usar o Menu Connect!`;
+    const whatsappUrl = `https://wa.me/${cleanedPhone}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+    showToast("Confirmação enviada para o WhatsApp!");
+};
+
+const handleBooking = ({ restaurant, table, dateTime, guests }) => {
     userReservations.bookedTable = {
         restaurantId: restaurant.id,
         tableId: table.id,
         restaurantName: restaurant.name,
         restaurantImage: restaurant.imageUrl,
-        bookingTime: dateTime
+        bookingTime: dateTime,
+        guests: guests,
+        status: 'confirmed'
     };
 
     showToast(`Mesa ${table.id} em ${restaurant.name} reservada com sucesso!`);
@@ -261,6 +384,9 @@ const handleBooking = ({ restaurant, table, dateTime }) => {
         confirmationModalMessage.value = "Sua reserva é para agora! Por favor, dirija-se ao restaurante.";
     }
     isConfirmationModalOpen.value = true;
+    setTimeout(() => {
+        sendWhatsAppConfirmation({ restaurant, table, dateTime, guests });
+    }, 500);
 };
 
 const handleWaitingList = ({ restaurant, table }) => {
@@ -282,6 +408,15 @@ const handleCancellation = (type) => {
     if (type === 'waiting' && userReservations.waitingForTable) {
         showToast(`Saída da fila de espera da mesa ${userReservations.waitingForTable.tableId}.`);
         userReservations.waitingForTable = null;
+    }
+};
+
+// AQUI ESTÁ A FUNÇÃO QUE FALTAVA
+const handleConfirmReservation = (reservation) => {
+    if (userReservations.bookedTable && userReservations.bookedTable.tableId === reservation.tableId) {
+        userReservations.bookedTable.status = 'confirmed';
+        showToast(`Reserva para a mesa ${reservation.tableId} confirmada!`);
+        // Aqui, no futuro, você também salvaria esta alteração no Local Storage ou enviaria para o back-end.
     }
 };
 
@@ -308,6 +443,12 @@ const handleAddRestaurant = (newRestaurantData) => {
     const restaurantToAdd = {
         id: newId,
         ...newRestaurantData,
+        mapElements: [
+            { id: 'bar-1', label: 'Bar', x: 10, y: 10, width: 150, height: 40, fill: '#a8a29e', textColor: '#FFFFFF', rx: 5, rotation: 0, icon_svg: '...' },
+            { id: 'kitchen-1', label: 'Cozinha', x: 280, y: 10, width: 110, height: 60, fill: '#e7e5e4', textColor: '#57534e', rx: 5, rotation: 0, icon_svg: '...' }
+        ],
+        tables: [],
+        floorPatternId: 'floor-marble',
         menu: [],
         isNew: true
     };
@@ -315,6 +456,19 @@ const handleAddRestaurant = (newRestaurantData) => {
     saveRestaurantsToLocalStorage();
     closeAddRestaurantModal();
     showToast(`Restaurante '${newRestaurantData.name}' adicionado com sucesso!`);
+};
+
+// CORREÇÃO: Nova função para salvar as alterações do mapa
+const handleUpdateMap = (updatedLayout) => {
+    // viewState.data contém o restaurante que está a ser editado
+    const restaurantIndex = restaurants.findIndex(r => r.id === viewState.data.id);
+    if (restaurantIndex !== -1) {
+        restaurants[restaurantIndex].mapElements = updatedLayout.mapElements;
+        restaurants[restaurantIndex].tables = updatedLayout.tables;
+        restaurants[restaurantIndex].floorPatternId = updatedLayout.floorPatternId;
+        saveRestaurantsToLocalStorage(); // Salva no Local Storage
+        showToast('Mapa salvo com sucesso!');
+    }
 };
 
 const openAddDishModal = (props = {}) => {
@@ -328,9 +482,7 @@ const handleAddDish = (newDishData) => {
         showToast(`Erro: Restaurante '${newDishData.restaurantName}' não encontrado.`, 'error');
         return;
     }
-
     const newDishId = (allDishes.value.length > 0 ? Math.max(...allDishes.value.map(d => parseInt(d.id) || 0)) : 0) + 1;
-
     const dishToAdd = {
         id: newDishId,
         name: newDishData.dishName,
@@ -342,12 +494,12 @@ const handleAddDish = (newDishData) => {
         category: newDishData.category,
         description: 'Um novo prato delicioso.'
     };
-    
     parentRestaurant.menu.push(dishToAdd);
     saveRestaurantsToLocalStorage();
     closeAddDishModal();
     showToast(`Prato '${dishToAdd.dishName}' adicionado com sucesso!`);
 };
+
 </script>
 
 <template>
@@ -397,30 +549,33 @@ const handleAddDish = (newDishData) => {
         <RestaurantDetailView
             v-if="viewState.name === 'restaurantDetail'"
             :restaurant="viewState.data"
-            @back="goBack"
+            @back-to-main="goToView('home')"
             @open-action-modal="openActionModal"
             @open-add-dish-modal="openAddDishModal"
+            @confirm-encontro="handleConfirmEncontro"
         />
         <ReservationView
             v-if="viewState.name === 'reservation'"
             :restaurant="viewState.data"
             :user-reservations="userReservations"
-            @back="goBack"
+            @back-to-main="goToView('home')"
             @book-table="handleBooking"
             @join-waitlist="handleWaitingList"
             @cancel-reservation="handleCancellation('booked')"
+            @update-map="handleUpdateMap"
         />
         <MyReservationsView
             v-if="viewState.name === 'myReservations'"
             :reservations="userReservations"
             @cancel-reservation="handleCancellation"
-            @back="goBack"
+            @confirm-reservation="handleConfirmReservation" 
+            @back-to-main="goToView('home')"
         />
         <UserProfileView
             v-if="viewState.name === 'userProfile'"
             :user="userProfile"
             @update-user="handleUpdateUser"
-            @back="goBack"
+            @back-to-main="goToView('home')"
         />
         <CartView
             v-if="viewState.name === 'cart'"
@@ -429,12 +584,26 @@ const handleAddDish = (newDishData) => {
             @update-quantity="updateQuantity"
             @remove-from-cart="removeFromCart"
             @add-to-cart="addToCart"
-            @back="goBack"
+            @back-to-main="goToView('home')"
             @checkout="openCheckout"
         />
-
+        <FavoriteRestaurantsView
+            v-if="viewState.name === 'favoriteRestaurants'"
+            :favorite-restaurants="favoritedRestaurantsList"
+            @toggle-favorite="toggleRestaurantFavorite"
+            @request-reservation="restaurant => goToView('reservation', restaurant)"
+            @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)"
+            @back-to-main="goToView('home')"
+        />
+        <FavoriteDishesView
+            v-if="viewState.name === 'favoriteDishes'"
+            :favorite-dishes="favoritedDishesList"
+            @toggle-favorite="toggleDishFavorite"
+            @open-action-modal="openActionModal"
+            @open-dine-options="openDineOptionsModal"
+            @back-to-main="goToView('home')"
+        />
         <Footer />
-
         <AddRestaurantModal
             v-if="isAddRestaurantModalOpen"
             @close="closeAddRestaurantModal"

@@ -125,7 +125,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useUserStore } from '@/stores/userStore';
 import TableActionModal from './TableActionModal.vue';
 import BookingModal from './BookingModal.vue';
@@ -133,7 +133,8 @@ import TableViewModal from './TableViewModal.vue';
 import TableConfigModal from './TableConfigModal.vue';
 
 const props = defineProps({ restaurant: Object, userReservations: Object });
-const emit = defineEmits(['backToMain', 'bookTable', 'joinWaitlist', 'cancelReservation']);
+// CORREÇÃO: Adicionado o evento 'updateMap'
+const emit = defineEmits(['backToMain', 'bookTable', 'joinWaitlist', 'cancelReservation', 'updateMap']);
 
 const userStore = useUserStore();
 
@@ -148,23 +149,18 @@ const icons = {
     table_round: `<path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>`,
 };
 
-const getInitialState = () => ({
-    mapElements: [
-        { id: 'bar-1', label: 'Bar', x: 10, y: 10, width: 150, height: 40, fill: '#a8a29e', textColor: '#FFFFFF', rx: 5, rotation: 0, icon_svg: icons.bar },
-        { id: 'kitchen-1', label: 'Cozinha', x: 280, y: 10, width: 110, height: 60, fill: '#e7e5e4', textColor: '#57534e', rx: 5, rotation: 0, icon_svg: icons.kitchen },
-        { id: 'entrance-1', label: 'Entrada', x: 10, y: 250, width: 80, height: 40, fill: '#d1fae5', textColor: '#065f46', rx: 0, rotation: 0, icon_svg: icons.entrance },
-        { id: 'cashier-1', label: 'Caixa', x: 320, y: 250, width: 70, height: 40, fill: '#dbeafe', textColor: '#1e40af', rx: 5, rotation: 0, icon_svg: icons.cashier },
-    ],
-    tables: [
-        { id: 1, x: 50, y: 80, width: 40, height: 40, shape: 'round', status: 'available', images: ['https://placehold.co/800x600/6366f1/ffffff?text=Vista+Mesa+1'] },
-        { id: 2, x: 110, y: 80, width: 35, height: 35, shape: 'square', status: 'occupied', images: [] },
-    ],
-    floorPatternId: 'floor-marble'
-});
-
 const mapElements = reactive([]);
 const tables = reactive([]);
 const selectedFloorPatternId = ref('');
+
+onMounted(() => {
+    if (props.restaurant) {
+        // Usa `Object.assign` para copiar as propriedades para os arrays reativos
+        Object.assign(mapElements, JSON.parse(JSON.stringify(props.restaurant.mapElements || [])));
+        Object.assign(tables, JSON.parse(JSON.stringify(props.restaurant.tables || [])));
+        selectedFloorPatternId.value = props.restaurant.floorPatternId || 'floor-marble';
+    }
+});
 
 const toolbox = reactive([
     { type: 'element', label: 'WC 🚺', width: 40, height: 40, fill: '#fecaca', textColor: '#b91c1c', rx: 3, rotation: 0, icon_svg: icons.wc_female },
@@ -186,23 +182,6 @@ const offset = reactive({ x: 0, y: 0 });
 const svgMapRef = ref(null);
 let originalState = {};
 let draggedNewElementType = null;
-
-const saveMapToLocalStorage = () => {
-    localStorage.setItem(`mapLayout_${props.restaurant.id}`, JSON.stringify({
-        mapElements: mapElements,
-        tables: tables,
-        floorPatternId: selectedFloorPatternId.value
-    }));
-};
-
-const loadMapFromLocalStorage = () => {
-    const savedLayout = localStorage.getItem(`mapLayout_${props.restaurant.id}`);
-    const initialState = savedLayout ? JSON.parse(savedLayout) : getInitialState();
-    tables.length = 0; tables.push(...initialState.tables);
-    mapElements.length = 0; mapElements.push(...initialState.mapElements);
-    selectedFloorPatternId.value = initialState.floorPatternId;
-};
-loadMapFromLocalStorage();
 
 const toggleEditMode = () => {
     isEditMode.value = !isEditMode.value;
@@ -259,7 +238,13 @@ const endInteraction = () => {
 };
 
 const saveChanges = () => {
-    saveMapToLocalStorage();
+    // CORREÇÃO: Emite um evento com os dados atualizados para o App.vue
+    const updatedLayout = {
+        mapElements: JSON.parse(JSON.stringify(mapElements)),
+        tables: JSON.parse(JSON.stringify(tables)),
+        floorPatternId: selectedFloorPatternId.value
+    };
+    emit('updateMap', updatedLayout);
     toggleEditMode();
 };
 
@@ -324,7 +309,6 @@ const handleSaveTableConfig = (updatedTableData) => {
     if (tableIndex !== -1) {
         tables[tableIndex].id = updatedTableData.id;
         tables[tableIndex].images = updatedTableData.images;
-        saveMapToLocalStorage();
     }
     isTableConfigModalOpen.value = false;
 };

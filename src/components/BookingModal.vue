@@ -16,8 +16,8 @@
                 </div>
                  <div>
                     <label for="guests" class="block text-sm font-medium text-gray-700">Número de Pessoas</label>
-                    <input type="number" id="guests" value="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                </div>
+                    <input type="number" id="guests" v-model="numberOfGuests" min="1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    </div>
             </div>
             <div class="p-6 bg-gray-50 rounded-b-2xl flex gap-3">
                 <button @click="$emit('close')" class="w-full bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-bold hover:bg-gray-300 transition-colors">Cancelar</button>
@@ -26,6 +26,7 @@
         </div>
     </div>
 </template>
+
 <script setup>
 import { ref } from 'vue';
 
@@ -38,6 +39,7 @@ const emit = defineEmits(['close', 'confirmBooking']);
 const today = new Date();
 const bookingDate = ref(today.toISOString().split('T')[0]);
 const bookingTime = ref(`${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}`);
+const numberOfGuests = ref(2); // INÍCIO DA ALTERAÇÃO: Variável para guardar o número de pessoas
 
 const onConfirm = () => {
     const [year, month, day] = bookingDate.value.split('-').map(Number);
@@ -49,6 +51,7 @@ const onConfirm = () => {
         return;
     }
 
-    emit('confirmBooking', { dateTime });
+    // INÍCIO DA ALTERAÇÃO: Envia também o número de pessoas
+    emit('confirmBooking', { dateTime, guests: numberOfGuests.value });
 };
 </script>
