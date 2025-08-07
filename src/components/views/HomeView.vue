@@ -1,7 +1,9 @@
 <template>
     <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <FrequentOrdersSection 
-            :frequent-dishes="frequentDishes"
+            v-if="favoritedDishesList.length > 0"
+            title="Meus Pratos Favoritos"
+            :dishes="favoritedDishesList"
             :favorite-dishes="favoriteDishes"
             @open-action-modal="dish => $emit('openActionModal', dish)"
             @open-dine-options="dish => $emit('openDineOptions', dish)"
@@ -25,17 +27,19 @@
         <AICreateDish :all-dishes="allDishes" />
     </div>
 </template>
+
 <script setup>
+import { computed } from 'vue';
 import TrendingSection from '../sections/TrendingSection.vue';
 import DiscoverSection from '../sections/DiscoverSection.vue';
 import FrequentOrdersSection from '../sections/FrequentOrdersSection.vue';
 import AIFavoriteSection from '../sections/AIFavoriteSection.vue';
 import AICreateDish from '../sections/AICreateDish.vue';
 
-defineProps({
+const props = defineProps({
     restaurants: Array,
     trendingDishes: Array,
-    frequentDishes: Array,
+    frequentDishes: Array, // Este prop já não é usado, mas mantemo-lo para evitar erros
     favoriteDishes: Set,
     favoriteRestaurants: Set,
     allDishes: Array
@@ -50,4 +54,10 @@ defineEmits([
     'viewRestaurant', 
     'openPaymentModal'
 ]);
+
+const favoritedDishesList = computed(() => {
+    return props.allDishes
+        .filter(dish => props.favoriteDishes.has(dish.id))
+        .slice(0, 8);
+});
 </script>

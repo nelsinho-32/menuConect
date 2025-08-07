@@ -72,9 +72,11 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 
 const emit = defineEmits(['close', 'addRestaurant']);
+
+const isDraggingMain = ref(false);
 
 const newRestaurant = reactive({
     name: '',
