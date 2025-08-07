@@ -14,6 +14,7 @@ import UserProfileView from './components/UserProfileView.vue';
 import CartView from './components/CartView.vue';
 import FavoriteRestaurantsView from './components/views/FavoriteRestaurantsView.vue';
 import FavoriteDishesView from './components/views/FavoriteDishesView.vue';
+import OrderHistoryView from './components/views/OrderHistoryView.vue';
 
 // Modais
 import ActionModal from './components/ActionModal.vue';
@@ -22,14 +23,17 @@ import ConfirmationModal from './components/ConfirmationModal.vue';
 import DineOptionsModal from './components/DineOptionsModal.vue';
 import AddRestaurantModal from './components/AddRestaurantModal.vue';
 import AddDishModal from './components/AddDishModal.vue';
+import PixModal from './components/PixModal.vue';
 
 // 1. IMPORTAÇÃO DAS STORES DO PINIA
 import { useRestaurantStore } from './stores/restaurantStore';
 import { useEncontroStore } from './stores/encontroStore';
+import { useUserStore } from './stores/userStore';
 
 // 2. Ativação das stores para usar no componente
 const restaurantStore = useRestaurantStore();
 const encontroStore = useEncontroStore();
+const userStore = useUserStore();
 
 // --- DADOS REATIVOS QUE PERMANECEM NO APP.VUE ---
 const cart = reactive([]);
@@ -37,6 +41,7 @@ const favoriteDishes = reactive(new Set());
 const favoriteRestaurants = reactive(new Set());
 const isActionModalOpen = ref(false);
 const isPaymentModalOpen = ref(false);
+const isPixModalOpen = ref(false);
 const isDineOptionsModalOpen = ref(false);
 const currentDishForAction = ref(null);
 const isToastVisible = ref(false);
@@ -45,6 +50,8 @@ const paymentShortcut = ref(null);
 const isAddRestaurantModalOpen = ref(false);
 const isAddDishModalOpen = ref(false);
 const dishModalProps = ref({});
+const orderHistory = reactive([]);
+
 
 const viewState = reactive({
     name: 'home',
@@ -92,10 +99,22 @@ const loadFavoritesFromLocalStorage = () => {
     if (savedRestaurantIds) JSON.parse(savedRestaurantIds).forEach(id => favoriteRestaurants.add(id));
 };
 
+const saveOrderHistoryToLocalStorage = () => {
+    localStorage.setItem('menuConnectOrderHistory', JSON.stringify(orderHistory));
+};
+
+const loadOrderHistoryFromLocalStorage = () => {
+    const savedHistory = localStorage.getItem('menuConnectOrderHistory');
+    if (savedHistory) {
+        orderHistory.push(...JSON.parse(savedHistory));
+    }
+};
+
 // Quando a aplicação é montada, carrega tudo a partir das fontes corretas.
 onMounted(() => {
     restaurantStore.loadRestaurantsFromLocalStorage();
     loadFavoritesFromLocalStorage();
+    loadOrderHistoryFromLocalStorage();
 });
 
 
@@ -229,10 +248,38 @@ const openDineOptionsModal = (dish) => {
 const closeDineOptionsModal = () => isDineOptionsModalOpen.value = false;
 
 const openCheckout = (shortcut = null) => {
-    paymentShortcut.value = shortcut;
-    isPaymentModalOpen.value = true;
+    if (shortcut === 'pix') {
+        isPixModalOpen.value = true;
+    } else {
+        paymentShortcut.value = shortcut;
+        isPaymentModalOpen.value = true;
+    }
 };
+
+const closePixModal = () => isPixModalOpen.value = false;
 const closePaymentModal = () => isPaymentModalOpen.value = false;
+
+// função para lidar com o sucesso do pagamento
+const handlePaymentSuccess = () => {
+    if (cart.length === 0) return;
+
+    // 3. Cria um novo registo de encomenda
+    const newOrder = {
+        id: Date.now(), // ID único baseado no tempo
+        date: new Date().toISOString(),
+        items: JSON.parse(JSON.stringify(cart)), // Cópia profunda dos itens
+        total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) + 5 // Calcula o total
+    };
+
+    orderHistory.push(newOrder); // Adiciona ao nosso estado reativo
+    saveOrderHistoryToLocalStorage(); // Salva no Local Storage
+
+    cart.length = 0; // Esvazia o carrinho
+    closePaymentModal();
+    closePixModal();
+    goToView('home');
+    showToast("Pedido realizado com sucesso! Obrigado!");
+};
 
 const orderNowFromAction = ({ dish, quantity }) => {
     addToCart({ dish, quantity });
@@ -383,6 +430,8 @@ const closeAddDishModal = () => isAddDishModalOpen.value = false;
         <FavoriteDishesView v-if="viewState.name === 'favoriteDishes'" :favorite-dishes="favoritedDishesList"
             @toggle-favorite="toggleDishFavorite" @open-action-modal="openActionModal"
             @open-dine-options="openDineOptionsModal" @back-to-main="goToView('home')" />
+        <OrderHistoryView v-if="viewState.name === 'orderHistory'" :order-history="orderHistory"
+            @back-to-main="goToView('home')" />
 
         <Footer />
 
@@ -397,7 +446,8 @@ const closeAddDishModal = () => isAddDishModalOpen.value = false;
             @close-modal="closeDineOptionsModal" @dine-in="handleDineInOrTakeout" @takeout="handleDineInOrTakeout"
             @reserve="handleGoToReservation" />
         <PaymentModal v-if="isPaymentModalOpen" :cart="cart" :shortcut="paymentShortcut"
-            @close-modal="closePaymentModal" />
+            @close-modal="closePaymentModal" @payment-success="handlePaymentSuccess" />
+        <PixModal v-if="isPixModalOpen" :cart="cart" @close="closePixModal" @payment-success="handlePaymentSuccess" />
         <ConfirmationModal v-if="isConfirmationModalOpen" :message="confirmationModalMessage"
             @close="isConfirmationModalOpen = false" />
         <div

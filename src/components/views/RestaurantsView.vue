@@ -11,7 +11,7 @@
             </button>
         </div>
 
-        <div class="mb-8 flex flex-wrap gap-2">
+        <div class="mb-8 flex flex-wrap gap-2 border-b border-gray-200 pb-4">
             <button
                 @click="selectedCuisine = 'Todos'"
                 :class="['filter-button', selectedCuisine === 'Todos' ? 'active' : '']">
