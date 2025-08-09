@@ -16,6 +16,7 @@
                     :item="item"
                     @update-quantity="payload => $emit('updateQuantity', payload)"
                     @remove-from-cart="id => $emit('removeFromCart', id)"
+                    @edit-item="item => $emit('editItem', item)"
                 />
             </div>
 
@@ -63,7 +64,7 @@ const props = defineProps({
     cartItems: { type: Array, required: true },
     allDishes: { type: Array, required: true }
 });
-const emit = defineEmits(['updateQuantity', 'removeFromCart', 'addToCart', 'backToMain', 'checkout']);
+const emit = defineEmits(['updateQuantity', 'removeFromCart', 'addToCart', 'backToMain', 'checkout', 'editItem']);
 
 const isAISuggesting = ref(false);
 const aiSuggestion = ref(null);

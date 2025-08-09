@@ -15,6 +15,11 @@
                     <input type="text" id="dishName" v-model="newDish.dishName" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
 
+                <div>
+                    <label for="description" class="block text-sm font-medium text-gray-700">Ingredientes (separados por vírgula)</label>
+                    <textarea id="description" v-model="newDish.description" required rows="3" placeholder="Ex: Pão, carne, queijo, alface, tomate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                </div>
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div v-if="!restaurant">
                         <label for="restaurantName" class="block text-sm font-medium text-gray-700">Restaurante</label>
@@ -78,7 +83,8 @@ const newDish = reactive({
     restaurantName: '',
     price: '',
     imageUrl: '',
-    category: ''
+    category: '',
+    description: '', // Campo adicionado
 });
 
 onMounted(() => {

@@ -9,7 +9,7 @@
         </div>
 
         <div v-else class="space-y-6">
-            <div v-for="order in sortedHistory" :key="order.date" class="bg-white p-6 rounded-lg shadow-md">
+            <div v-for="order in sortedHistory" :key="order.id" class="bg-white p-6 rounded-lg shadow-md">
                 <div class="flex justify-between items-center border-b pb-3 mb-3">
                     <div>
                         <p class="font-bold text-lg text-gray-800">Pedido de {{ formatDate(order.date) }}</p>
@@ -17,13 +17,25 @@
                     </div>
                     <p class="font-bold text-xl text-indigo-600">R$ {{ order.total.toFixed(2).replace('.', ',') }}</p>
                 </div>
-                <div class="space-y-2">
-                    <div v-for="item in order.items" :key="item.id" class="flex items-center justify-between text-sm text-gray-600">
-                        <div class="flex items-center gap-3">
-                            <img :src="item.imageUrl" class="w-10 h-10 rounded object-cover">
-                            <span>{{ item.quantity }}x {{ item.dishName }}</span>
+                <div class="space-y-3">
+                    <div v-for="item in order.items" :key="item.cartItemId" class="text-sm text-gray-600 border-t pt-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <img :src="item.imageUrl" class="w-10 h-10 rounded object-cover">
+                                <div>
+                                    <span class="font-semibold text-gray-800">{{ item.quantity }}x {{ item.dishName }}</span>
+                                    <p class="text-xs text-gray-500">{{ item.restaurantName }}</p>
+                                </div>
+                            </div>
+                            <span>R$ {{ (item.price * item.quantity).toFixed(2).replace('.', ',') }}</span>
                         </div>
-                        <span>R$ {{ (item.price * item.quantity).toFixed(2).replace('.', ',') }}</span>
+                        
+                        <div v-if="getRemovedIngredients(item)" class="text-xs text-red-600 mt-2 ml-12 bg-red-50 p-2 rounded-md">
+                            <span class="font-semibold">Sem:</span> {{ getRemovedIngredients(item) }}
+                        </div>
+                        <div v-if="item.customization && item.customization.notes" class="text-xs text-gray-500 mt-2 ml-12 bg-gray-50 p-2 rounded-md">
+                            <span class="font-semibold">Notas:</span> {{ item.customization.notes }}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -40,7 +52,6 @@ const props = defineProps({
 
 defineEmits(['backToMain']);
 
-// Ordena o histórico do mais recente para o mais antigo
 const sortedHistory = computed(() => {
     return [...props.orderHistory].sort((a, b) => new Date(b.date) - new Date(a.date));
 });
@@ -53,5 +64,13 @@ const formatDate = (dateString) => {
         hour: '2-digit',
         minute: '2-digit'
     });
+};
+
+// Nova função para calcular os ingredientes removidos
+const getRemovedIngredients = (item) => {
+    if (!item.customization) return '';
+    const initialIngredients = new Set((item.description || '').split(',').map(i => i.trim()).filter(Boolean));
+    const customizedIngredients = new Set((item.customization.ingredients || '').split(',').map(i => i.trim()).filter(Boolean));
+    return Array.from(initialIngredients).filter(i => !customizedIngredients.has(i)).join(', ');
 };
 </script>
