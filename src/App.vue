@@ -185,6 +185,19 @@ const handleConfirmEncontro = (encontroData) => {
     encontroStore.cancelPlanning();
 };
 
+// Nova função para atualizar a opção de consumo de um grupo de itens
+const handleUpdateDineOption = ({ restaurantId, newOption }) => {
+    cart.forEach(item => {
+        if (item.restaurantId === restaurantId) {
+            item.dineOption = newOption;
+        }
+    });
+    const restaurantName = cart.find(item => item.restaurantId === restaurantId)?.restaurantName;
+    if (restaurantName) {
+        showToast(`Opção de consumo para ${restaurantName} atualizada!`);
+    }
+};
+
 const removeFromCart = (cartItemId) => {
     const index = cart.findIndex(item => item.cartItemId === cartItemId);
     if (index !== -1) {
@@ -206,8 +219,8 @@ const updateQuantity = ({ cartItemId, quantity }) => {
 const handleUpdateCartItem = ({ dish, quantity, customization }) => {
     const itemIndex = cart.findIndex(item => item.cartItemId === dish.cartItemId);
     if (itemIndex !== -1) {
-        cart[itemIndex].quantity = quantity;
-        cart[itemIndex].customization = customization;
+        const originalDineOption = cart[itemIndex].dineOption;
+        cart[itemIndex] = { ...dish, quantity, customization, dineOption: originalDineOption, cartItemId: dish.cartItemId };
         showToast(`Item '${dish.dishName}' atualizado.`);
     }
     closeCustomizeModal();
@@ -265,12 +278,24 @@ const closePaymentModal = () => isPaymentModalOpen.value = false;
 // função para lidar com o sucesso do pagamento
 const handlePaymentSuccess = () => {
     if (cart.length === 0) return;
+
+    // AQUI ESTÁ A LÓGICA ATUALIZADA
+    const deliveryRestaurants = new Set();
+    cart.forEach(item => {
+        if (item.dineOption === 'delivery' || !item.dineOption) {
+            deliveryRestaurants.add(item.restaurantId);
+        }
+    });
+    const finalDeliveryFee = deliveryRestaurants.size * 5.00;
+    const finalSubtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
     const newOrder = {
         id: Date.now(),
         date: new Date().toISOString(),
         items: JSON.parse(JSON.stringify(cart)),
-        total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) + 5
+        total: finalSubtotal + finalDeliveryFee // Guarda o total correto
     };
+
     orderHistory.push(newOrder);
     saveOrderHistoryToLocalStorage();
     cart.length = 0;
@@ -281,12 +306,16 @@ const handlePaymentSuccess = () => {
 };
 
 const orderNowFromAction = ({ dish, quantity }) => {
-    addToCart({ dish, quantity });
+    addToCart({ dish, quantity, dineOption: 'delivery' });
     goToView('cart');
 };
 
-const handleDineInOrTakeout = (dish) => {
-    addToCart({ dish, quantity: 1 });
+const handleDineInOrTakeout = (payload) => {
+    addToCart({
+        dish: payload.dish,
+        quantity: 1,
+        dineOption: payload.dineOption
+    });
     goToView('cart');
 };
 
@@ -393,10 +422,9 @@ const closeCustomizeModal = () => {
     isCustomizeModalOpen.value = false;
 };
 
-const addToCart = ({ dish, quantity, customization = null }) => {
-    // Cria um ID único para cada item no carrinho, para diferenciar personalizações
+const addToCart = ({ dish, quantity, customization = null, dineOption = 'delivery' }) => {
     const cartItemId = `${dish.id}-${Date.now()}`;
-    cart.push({ ...dish, quantity, customization, cartItemId });
+    cart.push({ ...dish, quantity, customization, dineOption, cartItemId });
 
     closeCustomizeModal();
     closeActionModal();
@@ -439,9 +467,9 @@ const addToCart = ({ dish, quantity, customization = null }) => {
             @back-to-main="goBack" />
         <UserProfileView v-if="viewState.name === 'userProfile'" :user="userProfile" @update-user="handleUpdateUser"
             @back-to-main="goBack" />
-        <CartView v-if="viewState.name === 'cart'" :cart-items="cart" :all-dishes="restaurantStore.allDishes"
-            @update-quantity="updateQuantity" @remove-from-cart="removeFromCart" @add-to-cart="addToCart"
-            @back-to-main="goBack" @checkout="openCheckout" @edit-item="openCustomizeModal" />
+        <CartView v-if="viewState.name === 'cart'" :cart-items="cart" @update-quantity="updateQuantity"
+            @remove-from-cart="removeFromCart" @edit-item="openCustomizeModal"
+            @update-dine-option="handleUpdateDineOption" @back-to-main="goBack" @checkout="openCheckout" />
         <FavoriteRestaurantsView v-if="viewState.name === 'favoriteRestaurants'"
             :favorite-restaurants="favoritedRestaurantsList" @toggle-favorite="toggleRestaurantFavorite"
             @request-reservation="restaurant => goToView('reservation', restaurant)"

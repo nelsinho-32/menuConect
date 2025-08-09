@@ -9,8 +9,8 @@
             <p class="text-gray-500 mb-6 text-sm">Escolha uma opção para {{ dish.dishName }}</p>
 
             <div class="flex flex-col gap-3">
-                <button @click="$emit('dineIn', dish)" class="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-indigo-700 transition-colors">Comer no Local</button>
-                <button @click="$emit('takeout', dish)" class="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-indigo-700 transition-colors">Para Retirada</button>
+                <button @click="$emit('dineIn', { dish, dineOption: 'dine-in' })" class="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-indigo-700 transition-colors">Comer no Local</button>
+                <button @click="$emit('takeout', { dish, dineOption: 'takeout' })" class="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-indigo-700 transition-colors">Para Retirada</button>
                 <button @click="$emit('reserve', dish)" class="w-full bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-bold hover:bg-gray-300 transition-colors">Reservar uma Mesa</button>
             </div>
         </div>
@@ -25,4 +25,3 @@ defineProps({
 });
 defineEmits(['closeModal', 'dineIn', 'takeout', 'reserve']);
 </script>
-
