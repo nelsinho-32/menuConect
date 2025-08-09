@@ -2,19 +2,16 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
 export const useEncontroStore = defineStore('encontro', () => {
-  // Estado
   const plannedEncontro = ref(null);
-
-  // Getters
   const isPlanning = computed(() => plannedEncontro.value !== null);
 
-  // Ações
   function startPlanning(restaurant) {
     plannedEncontro.value = {
       restaurantId: restaurant.id,
       restaurantName: restaurant.name,
-      step: 'table', // table -> guests -> menu -> payment
+      step: 'table', // table -> dateTime -> guests -> menu -> payment -> confirm
       selectedTable: null,
+      dateTime: null,
       guests: [{ id: 1, name: 'Convidado 1', menu: {} }],
       paymentOption: 'local',
     };
@@ -23,16 +20,24 @@ export const useEncontroStore = defineStore('encontro', () => {
   function setTable(table) {
     if (plannedEncontro.value) {
       plannedEncontro.value.selectedTable = table;
+      plannedEncontro.value.step = 'dateTime';
+    }
+  }
+
+  function setDateTime(date, time) {
+    if (plannedEncontro.value) {
+      const [year, month, day] = date.split('-').map(Number);
+      const [hours, minutes] = time.split(':').map(Number);
+      plannedEncontro.value.dateTime = new Date(year, month - 1, day, hours, minutes);
       plannedEncontro.value.step = 'guests';
     }
   }
 
   function setGuests(count) {
     if (plannedEncontro.value) {
-      plannedEncontro.value.guests = [];
-      for (let i = 1; i <= count; i++) {
-        plannedEncontro.value.guests.push({ id: i, name: `Convidado ${i}`, menu: {} });
-      }
+      plannedEncontro.value.guests = Array.from({ length: count }, (_, i) => ({
+        id: i + 1, name: `Convidado ${i + 1}`, menu: {}
+      }));
       plannedEncontro.value.step = 'menu';
     }
   }
@@ -58,13 +63,7 @@ export const useEncontroStore = defineStore('encontro', () => {
   }
 
   return {
-    plannedEncontro,
-    isPlanning,
-    startPlanning,
-    setTable,
-    setGuests,
-    setGuestMenu,
-    setPayment,
-    cancelPlanning
+    plannedEncontro, isPlanning, startPlanning, setTable, setDateTime,
+    setGuests, setGuestMenu, setPayment, cancelPlanning
   }
 })

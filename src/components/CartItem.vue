@@ -1,10 +1,13 @@
 <template>
-    <div class="flex items-start gap-4 pl-8 border-t py-4">
+    <div class="flex items-start gap-4 border-t py-4" :class="{'bg-indigo-50 p-4 -m-4 rounded-lg': item.isPlanned}">
         <img :src="item.imageUrl" :alt="item.dishName" class="w-16 h-16 object-cover rounded-lg">
         <div class="flex-grow">
-            <h3 class="font-semibold text-gray-800">{{ item.dishName }}</h3>
+            <div class="flex items-center gap-2">
+                <span v-if="item.isPlanned" title="Parte de um Encontro Planeado">🎁</span>
+                <h3 class="font-semibold text-gray-800">{{ item.dishName }}</h3>
+            </div>
             
-            <div v-if="hasCustomization" class="text-xs text-gray-500 mt-1 bg-gray-50 p-2 rounded-md">
+            <div v-if="hasCustomization" class="text-xs text-gray-500 mt-1 bg-white p-2 rounded-md">
                 <p v-if="removedIngredients" class=" text-red-600">
                     <span class="font-semibold">Sem:</span> {{ removedIngredients }}
                 </p>
@@ -17,7 +20,7 @@
         </div>
 
         <div class="flex flex-col items-end justify-between h-16">
-            <div class="flex items-center border border-gray-300 rounded-full">
+            <div class="flex items-center border border-gray-300 rounded-full bg-white">
                 <button @click="decreaseQuantity" class="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-l-full">-</button>
                 <span class="px-3 font-semibold text-sm">{{ item.quantity }}</span>
                 <button @click="increaseQuantity" class="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-r-full">+</button>

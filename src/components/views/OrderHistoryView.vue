@@ -58,15 +58,10 @@ const sortedHistory = computed(() => {
 
 const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString('pt-BR', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+        day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
 };
 
-// Nova função para calcular os ingredientes removidos
 const getRemovedIngredients = (item) => {
     if (!item.customization) return '';
     const initialIngredients = new Set((item.description || '').split(',').map(i => i.trim()).filter(Boolean));

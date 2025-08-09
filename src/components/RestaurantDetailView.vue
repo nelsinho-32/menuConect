@@ -26,7 +26,11 @@
             <h1 class="text-4xl md:text-5xl font-extrabold mt-6">{{ restaurant.name }}</h1>
         </div>
 
-        <AIEncontroSection :restaurant="restaurant" />
+        <AIEncontroSection 
+            :restaurant="restaurant"
+            @confirm-encontro="payload => $emit('confirmEncontro', payload)"
+            @open-menu-item-select-modal="payload => { console.log('3. Evento RECEBIDO em RestaurantDetailView e RE-EMITIDO'); $emit('openMenuItemSelectModal', payload) }"
+        />
 
         <RestaurantMenu 
             :menu="restaurant.menu" 
@@ -47,7 +51,7 @@ const props = defineProps({
 });
 
 // O evento 'openAddDishModal' é agora re-emitido para o App.vue com os dados necessários
-defineEmits(['backToMain', 'openActionModal', 'openAddDishModal']);
+defineEmits(['backToMain', 'openActionModal', 'openAddDishModal', 'confirmEncontro', 'openMenuItemSelectModal']);
 
 const carouselImages = ref([]);
 const currentImageIndex = ref(0);

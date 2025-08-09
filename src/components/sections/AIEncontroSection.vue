@@ -35,6 +35,7 @@
                 :restaurant="restaurant" 
                 @confirm-encontro="payload => $emit('confirmEncontro', payload)"
                 @open-table-select-modal="isTableSelectModalOpen = true"
+                @open-menu-item-select-modal="payload => { console.log('2. Evento RECEBIDO em AIEncontroSection e RE-EMITIDO'); $emit('openMenuItemSelectModal', payload) }"
             />
         </div>
 
@@ -59,7 +60,7 @@ const props = defineProps({
     restaurant: { type: Object, required: true }
 });
 
-defineEmits(['confirmEncontro']);
+defineEmits(['confirmEncontro', 'openMenuItemSelectModal']);
 
 const encontroStore = useEncontroStore(); // 2. INICIALIZAR O ARMAZÉM
 const activeTab = ref('ai');

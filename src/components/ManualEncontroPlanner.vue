@@ -1,10 +1,10 @@
 <template>
     <div class="bg-white p-6 rounded-lg shadow-lg border border-gray-200">
         <div v-if="!encontroStore.isPlanning">
-            <h3 class="font-bold text-xl text-gray-800">Planeja o Encontro Perfeito</h3>
+            <h3 class="font-bold text-xl text-gray-800">Planeie o Encontro Perfeito</h3>
             <p class="text-gray-500 mt-2">Escolha a mesa, os pratos para cada convidado e a forma de pagamento. Ideal para surpreender alguém!</p>
             <button @click="encontroStore.startPlanning(restaurant)" class="mt-4 bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">
-                Começar a Planejar
+                Começar a Planear
             </button>
         </div>
 
@@ -18,10 +18,25 @@
                     Ver Mapa e Escolher Mesa
                 </button>
             </div>
+            
+            <div v-if="encontroStore.plannedEncontro.step === 'dateTime'">
+                <h4 class="font-bold text-lg">Passo 2: Defina a data e hora</h4>
+                 <p class="text-sm text-gray-500 mb-4">Mesa selecionada: <span class="font-bold text-indigo-600">{{ encontroStore.plannedEncontro.selectedTable.id }}</span></p>
+                 <div class="grid grid-cols-2 gap-4">
+                     <div>
+                        <label for="date" class="block text-xs font-medium text-gray-700">Data</label>
+                        <input type="date" id="date" v-model="bookingDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm">
+                    </div>
+                    <div>
+                        <label for="time" class="block text-xs font-medium text-gray-700">Horário</label>
+                        <input type="time" id="time" v-model="bookingTime" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm">
+                    </div>
+                 </div>
+                 <button @click="confirmDateTime" class="mt-4 bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">Continuar</button>
+            </div>
 
             <div v-if="encontroStore.plannedEncontro.step === 'guests'">
-                <h4 class="font-bold text-lg">Passo 2: Para quantas pessoas?</h4>
-                <p class="text-sm text-gray-500 mb-4">Mesa selecionada: <span class="font-bold text-indigo-600">{{ encontroStore.plannedEncontro.selectedTable.id }}</span></p>
+                <h4 class="font-bold text-lg">Passo 3: Para quantas pessoas?</h4>
                 <div class="flex items-center gap-4">
                     <input type="number" v-model.number="guestCount" min="1" max="10" class="w-24 p-2 border rounded-md">
                     <button @click="encontroStore.setGuests(guestCount)" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">Continuar</button>
@@ -29,41 +44,29 @@
             </div>
 
             <div v-if="encontroStore.plannedEncontro.step === 'menu'">
-                <h4 class="font-bold text-lg">Passo 3: Monte o pedido para cada convidado</h4>
+                <h4 class="font-bold text-lg">Passo 4: Monte o pedido para cada convidado</h4>
                  <div class="space-y-4 mt-4 max-h-96 overflow-y-auto pr-2">
                     <div v-for="guest in encontroStore.plannedEncontro.guests" :key="guest.id" class="bg-gray-50 p-4 rounded-lg">
                         <p class="font-semibold text-gray-800">{{ guest.name }}</p>
-                        <div class="grid grid-cols-2 gap-4 mt-2 text-sm">
-                            <select @change="e => encontroStore.setGuestMenu(guest.id, 'starter', e.target.value)" class="p-2 border rounded-md bg-white">
-                                <option value="">-- Entrada (Opcional) --</option>
-                                <option v-for="item in menuByCategory.Entradas" :key="item.id">{{ item.name }}</option>
-                            </select>
-                             <select @change="e => encontroStore.setGuestMenu(guest.id, 'main', e.target.value)" class="p-2 border rounded-md bg-white">
-                                <option value="">-- Prato Principal --</option>
-                                <option v-for="item in menuByCategory['Prato Principal']" :key="item.id">{{ item.name }}</option>
-                            </select>
-                             <select @change="e => encontroStore.setGuestMenu(guest.id, 'dessert', e.target.value)" class="p-2 border rounded-md bg-white">
-                                <option value="">-- Sobremesa (Opcional) --</option>
-                                <option v-for="item in menuByCategory.Sobremesas" :key="item.id">{{ item.name }}</option>
-                            </select>
-                             <select @change="e => encontroStore.setGuestMenu(guest.id, 'drink', e.target.value)" class="p-2 border rounded-md bg-white">
-                                <option value="">-- Bebida --</option>
-                                <option v-for="item in menuByCategory.Bebidas" :key="item.id">{{ item.name }}</option>
-                            </select>
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2 mt-2 text-sm">
+                            <MenuItemSelector label="Entrada" :selected-item="guest.menu.starter" @select="() => $emit('openMenuItemSelectModal', { guest, category: 'Entradas', menuItems: menuByCategory.Entradas })" />
+                            <MenuItemSelector label="Prato Principal" :selected-item="guest.menu.main" @select="() => $emit('openMenuItemSelectModal', { guest, category: 'Prato Principal', menuItems: menuByCategory['Prato Principal'] })" />
+                            <MenuItemSelector label="Sobremesa" :selected-item="guest.menu.dessert" @select="() => $emit('openMenuItemSelectModal', { guest, category: 'Sobremesas', menuItems: menuByCategory.Sobremesas })" />
+                            <MenuItemSelector label="Bebida" :selected-item="guest.menu.drink" @select="() => $emit('openMenuItemSelectModal', { guest, category: 'Bebidas', menuItems: menuByCategory.Bebidas })" />
                         </div>
                     </div>
                 </div>
                 <button @click="encontroStore.plannedEncontro.step = 'payment'" class="mt-4 bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">Continuar para Pagamento</button>
             </div>
 
-             <div v-if="encontroStore.plannedEncontro.step === 'payment'">
-                 <h4 class="font-bold text-lg">Passo 4: Como deseja pagar?</h4>
+            <div v-if="encontroStore.plannedEncontro.step === 'payment'">
+                 <h4 class="font-bold text-lg">Passo 5: Como deseja pagar?</h4>
                  <div class="flex flex-col gap-3 mt-4">
-                     <button @click="encontroStore.setPayment('agora')" class="w-full text-left p-4 rounded-lg border-2 hover:border-indigo-500">
+                     <button @click="encontroStore.setPayment('agora')" class="w-full text-left p-4 rounded-lg border-2 hover:border-indigo-500 transition-colors">
                         <p class="font-bold">Pagar Agora</p>
                         <p class="text-sm text-gray-500">Adicionar tudo ao carrinho e finalizar a compra.</p>
                      </button>
-                     <button @click="encontroStore.setPayment('local')" class="w-full text-left p-4 rounded-lg border-2 hover:border-indigo-500">
+                     <button @click="encontroStore.setPayment('local')" class="w-full text-left p-4 rounded-lg border-2 hover:border-indigo-500 transition-colors">
                         <p class="font-bold">Pagar no Local</p>
                         <p class="text-sm text-gray-500">Apenas confirmar a reserva e o pré-pedido.</p>
                      </button>
@@ -78,28 +81,36 @@
                     Confirmar e Reservar
                 </button>
             </div>
-        </div>
+            </div>
     </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
 import { useEncontroStore } from '@/stores/encontroStore';
+import MenuItemSelector from './MenuItemSelector.vue';
 
-const props = defineProps({
-    restaurant: { type: Object, required: true }
-});
-const emit = defineEmits(['confirmEncontro', 'openTableSelectModal']);
+const props = defineProps({ restaurant: { type: Object, required: true } });
+const emit = defineEmits(['confirmEncontro', 'openTableSelectModal', 'openMenuItemSelectModal']);
 
-const encontroStore = useEncontroStore();   
+const encontroStore = useEncontroStore();
 const guestCount = ref(1);
 
+const today = new Date();
+const bookingDate = ref(today.toISOString().split('T')[0]);
+const bookingTime = ref(`${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}`);
+
+const confirmDateTime = () => {
+    encontroStore.setDateTime(bookingDate.value, bookingTime.value);
+};
+
 const menuByCategory = computed(() => {
-    const categorized = { 'Entradas': [], 'Prato Principal': [], 'Sobremesas': [], 'Bebidas': [] };
+    const categorized = { 'Entradas': [], 'Prato Principal': [], 'Sobremesas': [], 'Bebidas': [], 'Novidades': [] };
     if (props.restaurant && props.restaurant.menu) {
         props.restaurant.menu.forEach(item => {
-            if(categorized[item.category]) {
-                categorized[item.category].push(item);
+            const category = item.category || 'Novidades';
+            if (categorized.hasOwnProperty(category)) {
+                categorized[category].push(item);
             }
         });
     }
