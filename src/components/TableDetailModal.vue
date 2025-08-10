@@ -98,32 +98,36 @@ const updateStatus = (newStatus) => {
 };
 
 const updateTimer = () => {
+    // Verificação de segurança extra no início da função
+    if (!reservationDetails.value || !reservationDetails.value.bookingTime) return;
 
     const now = new Date();
     const bookingTime = new Date(reservationDetails.value.bookingTime);
     const diff = now - bookingTime;
 
     if (diff < 0) {
-        // A reserva ainda é no futuro
         timerLabel.value = 'Reserva agendada para';
         occupationTimer.value = bookingTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     } else {
-        // A reserva já começou, inicia o cronómetro
         timerLabel.value = 'Ocupada há';
         const hours = Math.floor(diff / 3600000);
         const minutes = Math.floor((diff % 3600000) / 60000);
         const seconds = Math.floor((diff % 60000) / 1000);
+        
         occupationTimer.value = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
 };
 
 onMounted(() => {
-    updateTimer(); // Executa uma vez para definir o estado inicial
-    timerInterval = setInterval(updateTimer, 1000); // Atualiza a cada segundo
+    // AQUI ESTÁ A CORREÇÃO PRINCIPAL: Só inicia o temporizador se houver uma reserva
+    if (reservationDetails.value) {
+        updateTimer();
+        timerInterval = setInterval(updateTimer, 1000);
+    }
 });
 
 onUnmounted(() => {
-    clearInterval(timerInterval); // Limpa o temporizador quando a modal fecha
+    if(timerInterval) clearInterval(timerInterval);
 });
 
 

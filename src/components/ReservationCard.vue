@@ -44,6 +44,11 @@
                  <button v-if="reservationStatus !== 'cancelled'" @click="$emit('cancel', type)" class="w-full bg-red-100 text-red-800 px-4 py-2 rounded-lg font-bold hover:bg-red-200 text-sm">
                     {{ type === 'booked' ? 'Cancelar Reserva' : 'Sair da Fila' }}
                  </button>
+
+                 <button @click="$emit('openChat', `Reserva da Mesa ${reservation.tableId}`)" class="w-full bg-gray-100 text-gray-800 px-4 py-2 rounded-lg font-bold hover:bg-gray-200 text-sm">
+                    Falar com o Restaurante
+                 </button>
+
             </div>
         </div>
     </div>
@@ -56,7 +61,7 @@ const props = defineProps({
     reservation: { type: Object, required: true },
     type: { type: String, required: true }
 });
-const emit = defineEmits(['cancel', 'confirm']);
+const emit = defineEmits(['cancel', 'confirm', 'openChat']);
 
 const countdown = ref('');
 const confirmationCountdown = ref('');

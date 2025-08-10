@@ -56,6 +56,13 @@
                   </ul>
               </div>
           </div>
+
+          <button @click="chatStore.openChat('Ajuda Geral')" title="Abrir Chat de Suporte" class="relative cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" fill="currentColor" class="text-gray-600 hover:text-indigo-600" viewBox="0 0 16 16">
+              <path d="M8 15c4.418 0 8-3.134 8-7s-3.582-7-8-7-8 3.134-8 7c0 1.76.743 3.37 1.97 4.6-.097 1.016-.417 2.13-.771 2.966-.079.186.074.394.273.362 2.256-.37 3.597-.938 4.18-1.234A9.06 9.06 0 0 0 8 15z"/>
+            </svg>
+          </button>
+
           <button @click="navigate('cart')" class="relative cursor-pointer">
             <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600 hover:text-indigo-600"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
             <span v-if="cartItemCount > 0" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">{{ cartItemCount }}</span>
@@ -74,6 +81,7 @@
                 </div>
             </div>
           </div>
+          
 
           <div class="flex items-center gap-2 rounded-full bg-gray-100 p-1 text-sm border">
               <button
@@ -94,10 +102,12 @@
 </template>
 
 <script setup>
-import { useUserStore } from '@/stores/userStore';
 import { ref, watch, onBeforeUnmount, computed, onMounted } from 'vue';
 import logo from '@/assets/images/LogoMarcaMenu.png';
+import { useUserStore } from '@/stores/userStore';
+import { useChatStore } from '@/stores/chatStore';
 
+const chatStore = useChatStore();
 const userStore = useUserStore();
 
 const props = defineProps({

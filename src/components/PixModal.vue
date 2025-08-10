@@ -57,10 +57,24 @@ const copyButtonText = ref('Copiar código');
 const countdown = ref('05:00');
 let timerInterval = null;
 
-const total = computed(() => {
-    const subtotal = props.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    return subtotal + 5; // Adiciona taxa de entrega
+// --- AQUI ESTÁ A CORREÇÃO ---
+const subtotal = computed(() => {
+    return props.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 });
+
+const deliveryFee = computed(() => {
+    // Conta quantos restaurantes únicos no carrinho têm pelo menos um item para delivery
+    const deliveryRestaurants = new Set();
+    props.cart.forEach(item => {
+        if (item.dineOption === 'delivery' || !item.dineOption) {
+            deliveryRestaurants.add(item.restaurantId);
+        }
+    });
+    return deliveryRestaurants.size * 5.00;
+});
+
+const total = computed(() => subtotal.value + deliveryFee.value);
+// --- FIM DA CORREÇÃO ---
 
 const copyPixCode = () => {
     navigator.clipboard.writeText(pixCode.value);

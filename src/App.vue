@@ -28,15 +28,18 @@ import PixModal from './components/PixModal.vue';
 import CustomizeDishModal from './components/CustomizeDishModal.vue';
 import SelectMenuItemModal from './components/SelectMenuItemModal.vue';
 import TableDetailModal from './components/TableDetailModal.vue';
+import ChatModal from './components/ChatModal.vue';
 
 // 1. IMPORTAÇÃO DAS STORES DO PINIA
 import { useRestaurantStore } from './stores/restaurantStore';
 import { useEncontroStore } from './stores/encontroStore';
 import { useUserStore } from './stores/userStore';
+import { useChatStore } from './stores/chatStore';
 
 // 2. Ativação das stores para usar no componente
 const restaurantStore = useRestaurantStore();
 const encontroStore = useEncontroStore();
+const chatStore = useChatStore();
 const userStore = useUserStore();
 
 // --- DADOS REATIVOS QUE PERMANECEM NO APP.VUE ---
@@ -586,6 +589,7 @@ const closeCustomizeModal = () => {
             @item-selected="handleMenuItemSelection" />
         <CustomizeDishModal v-if="isCustomizeModalOpen" :dish="currentDishForAction" @close="closeCustomizeModal"
             @add-to-cart="handleUpdateCartItem" />
+        <ChatModal />
         <div
             :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
             {{ toastMessage }}

@@ -76,7 +76,3 @@ Para executar o projeto localmente, siga estes passos:
 
 5.  **Acesse no navegador:**
     * Abra o endereço [http://localhost:5173](http://localhost:5173).
-
----
-
-Este `README.md` está agora muito mais completo e reflete o estado atual e impressionante da sua aplicação!
