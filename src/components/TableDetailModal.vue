@@ -69,7 +69,8 @@ const props = defineProps({
 });
 const emit = defineEmits(['close', 'updateStatus']);
 
-const occupationTimer = ref('00:00:00');
+const occupationTimer = ref('...');
+const timerLabel = ref('Ocupada há');
 let timerInterval = null;
 
 const reservationDetails = computed(() => {
@@ -97,24 +98,33 @@ const updateStatus = (newStatus) => {
 };
 
 const updateTimer = () => {
-    if (!reservationDetails.value) return;
+
     const now = new Date();
     const bookingTime = new Date(reservationDetails.value.bookingTime);
     const diff = now - bookingTime;
 
-    const hours = Math.floor(diff / 3600000);
-    const minutes = Math.floor((diff % 3600000) / 60000);
-    const seconds = Math.floor((diff % 60000) / 1000);
-    
-    occupationTimer.value = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    if (diff < 0) {
+        // A reserva ainda é no futuro
+        timerLabel.value = 'Reserva agendada para';
+        occupationTimer.value = bookingTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } else {
+        // A reserva já começou, inicia o cronómetro
+        timerLabel.value = 'Ocupada há';
+        const hours = Math.floor(diff / 3600000);
+        const minutes = Math.floor((diff % 3600000) / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+        occupationTimer.value = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
 };
 
-
 onMounted(() => {
-    updateTimer();
-    timerInterval = setInterval(updateTimer, 1000);
+    updateTimer(); // Executa uma vez para definir o estado inicial
+    timerInterval = setInterval(updateTimer, 1000); // Atualiza a cada segundo
 });
-onUnmounted(() => clearInterval(timerInterval));
+
+onUnmounted(() => {
+    clearInterval(timerInterval); // Limpa o temporizador quando a modal fecha
+});
 
 
 const getStatusBgColor = (status) => {

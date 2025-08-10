@@ -46,9 +46,7 @@
 import { ref, computed } from 'vue';
 import { useRestaurantStore } from '@/stores/restaurantStore';
 
-defineProps({
-    orderHistory: { type: Array, required: true }
-});
+// A prop 'orderHistory' foi removida, pois não é mais necessária aqui
 defineEmits(['openTableDetailModal']);
 
 const restaurantStore = useRestaurantStore();
@@ -64,14 +62,12 @@ const getStatusBorderColor = (status) => {
     if (status === 'cleaning') return 'border-yellow-400';
     return 'border-gray-200';
 };
-
 const getStatusBgColor = (status) => {
     if (status === 'available') return 'bg-green-100 text-green-800';
     if (status === 'occupied') return 'bg-gray-200 text-gray-800';
     if (status === 'cleaning') return 'bg-yellow-100 text-yellow-800';
     return 'bg-gray-100 text-gray-800';
 }
-
 const getStatusText = (status) => {
     if (status === 'available') return 'Disponível';
     if (status === 'occupied') return 'Ocupada';
