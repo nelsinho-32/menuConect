@@ -26,11 +26,14 @@
             <h1 class="text-4xl md:text-5xl font-extrabold mt-6">{{ restaurant.name }}</h1>
         </div>
 
-        <AIEncontroSection 
+         <AIEncontroSection 
             :restaurant="restaurant"
+            :user-profile="userProfile"
+            :all-users="allUsers"
             @confirm-encontro="payload => $emit('confirmEncontro', payload)"
             @open-menu-item-select-modal="payload => $emit('openMenuItemSelectModal', payload)"
             @open-customize-modal="payload => $emit('openCustomizeModal', payload)"
+            @open-table-select-modal="payload => $emit('openTableSelectModal', payload)"
         />
 
         <RestaurantMenu 
@@ -48,11 +51,13 @@ import AIEncontroSection from  './sections/AIEncontroSection.vue';
 import RestaurantMenu from './RestaurantMenu.vue';
 
 const props = defineProps({
-    restaurant: { type: Object, required: true }
+     restaurant: { type: Object, required: true },
+    userProfile: { type: Object, required: true },
+    allUsers: { type: Array, required: true },
 });
 
 // O evento 'openAddDishModal' é agora re-emitido para o App.vue com os dados necessários
-defineEmits(['backToMain', 'openActionModal', 'openAddDishModal', 'confirmEncontro', 'openMenuItemSelectModal', 'openCustomizeModal']);
+defineEmits(['backToMain', 'openActionModal', 'openAddDishModal', 'confirmEncontro', 'openMenuItemSelectModal', 'openCustomizeModal', 'openTableSelectModal']);
 
 const carouselImages = ref([]);
 const currentImageIndex = ref(0);

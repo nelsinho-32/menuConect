@@ -4,8 +4,16 @@
         
         <div class="bg-white rounded-2xl shadow-lg p-8 max-w-2xl mx-auto">
             <div class="flex flex-col sm:flex-row items-center gap-6">
-                <div class="relative">
-                    <img :src="editableUser.avatarUrl" class="w-32 h-32 rounded-full ring-4 ring-indigo-100">
+                <div class="relative group">
+                    <img :src="editableUser.avatarUrl" class="w-32 h-32 rounded-full ring-4 ring-indigo-100 object-cover">
+                    <label v-if="isEditing" for="avatarUpload" class="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center text-white cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M15 12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.172a3 3 0 0 0 2.12-.879l.83-.828A1 1 0 0 1 6.827 3h2.344a1 1 0 0 1 .707.293l.828.828A3 3 0 0 0 12.828 5H14a1 1 0 0 1 1 1v6zM2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2z"/>
+                            <path d="M8 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5zm0 1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 6.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0z"/>
+                        </svg>
+                        <span class="ml-2 text-sm">Alterar Foto</span>
+                    </label>
+                    <input type="file" id="avatarUpload" @change="handleAvatarUpload" accept="image/*" class="hidden">
                 </div>
                 <div class="text-center sm:text-left">
                     <h1 v-if="!isEditing" class="text-3xl font-bold text-gray-800">{{ editableUser.name }}</h1>
@@ -36,7 +44,7 @@
                     <span v-for="pref in editableUser.preferences" :key="pref" class="bg-indigo-100 text-indigo-700 text-sm font-medium px-3 py-1 rounded-full">{{ pref }}</span>
                 </div>
                 <div v-else>
-                    <input type="text" v-model="preferencesAsString" @keydown.enter.prevent="addPreference" placeholder="Adicione uma preferência e pressione Enter" class="w-full border-b-2 border-indigo-200 focus:outline-none focus:border-indigo-500">
+                    <input type="text" @keydown.enter.prevent="addPreference" placeholder="Adicione uma preferência e pressione Enter" class="w-full border-b-2 border-indigo-200 focus:outline-none focus:border-indigo-500">
                     <div class="flex flex-wrap gap-2 mt-2">
                         <span v-for="(pref, index) in editableUser.preferences" :key="pref" class="bg-indigo-100 text-indigo-700 text-sm font-medium px-3 py-1 rounded-full flex items-center">
                             {{ pref }}
@@ -68,15 +76,20 @@ const props = defineProps({
 const emit = defineEmits(['updateUser', 'backToMain']);
 
 const isEditing = ref(false);
-// Cria uma cópia profunda para edição, para não alterar o original até salvar
 const editableUser = reactive(JSON.parse(JSON.stringify(props.user)));
 
-const preferencesAsString = computed({
-    get: () => '',
-    set: (value) => {
-        // Usado apenas para capturar o input, a lógica está no addPreference
-    }
-});
+// AQUI ESTÁ A ALTERAÇÃO: Lógica para o upload da imagem
+const handleAvatarUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        // O resultado (e.target.result) é uma string base64 que representa a imagem
+        editableUser.avatarUrl = e.target.result;
+    };
+    reader.readAsDataURL(file);
+};
 
 const addPreference = (event) => {
     const newPref = event.target.value.trim();

@@ -16,6 +16,7 @@ import FavoriteRestaurantsView from './components/views/FavoriteRestaurantsView.
 import FavoriteDishesView from './components/views/FavoriteDishesView.vue';
 import OrderHistoryView from './components/views/OrderHistoryView.vue';
 import TableManagementView from './components/views/TableManagementView.vue';
+import ReservationSharedView from './components/views/ReservationSharedView.vue';
 
 // Modais
 import ActionModal from './components/ActionModal.vue';
@@ -77,12 +78,19 @@ const userReservations = reactive({
 });
 
 const userProfile = reactive({
+    id: 789,
     name: 'Nelsinho',
     email: 'nelsinho@email.com',
     phone: '+83 99692-1055',
     avatarUrl: 'https://placehold.co/256x256/6366f1/ffffff?text=N',
     preferences: ['Italiana', 'Hamburgueria', 'Japonesa']
 });
+
+const allUsers = reactive([
+    { id: 123, name: 'Maria Silva', avatarUrl: 'https://placehold.co/256x256/f87171/ffffff?text=M' },
+    { id: 456, name: 'João Santos', avatarUrl: 'https://placehold.co/256x256/60a5fa/ffffff?text=J' },
+]);
+
 
 const isConfirmationModalOpen = ref(false);
 const confirmationModalMessage = ref('');
@@ -122,13 +130,24 @@ const loadOrderHistoryFromLocalStorage = () => {
     }
 };
 
+const saveUserProfileToLocalStorage = () => {
+    localStorage.setItem('menuConnectUserProfile', JSON.stringify(userProfile));
+};
+
+const loadUserProfileFromLocalStorage = () => {
+    const savedProfile = localStorage.getItem('menuConnectUserProfile');
+    if (savedProfile) {
+        Object.assign(userProfile, JSON.parse(savedProfile));
+    }
+};
+
 // Quando a aplicação é montada, carrega tudo a partir das fontes corretas.
 onMounted(() => {
     restaurantStore.loadRestaurantsFromLocalStorage();
     loadFavoritesFromLocalStorage();
     loadOrderHistoryFromLocalStorage();
+    loadUserProfileFromLocalStorage();
 });
-
 
 // --- MÉTODOS ---
 const showToast = (message) => {
@@ -163,6 +182,8 @@ const handleAddDish = (newDishData) => {
     }
     closeAddDishModal();
 };
+
+
 
 const handleUpdateMap = (updatedLayout) => {
     if (viewState.data && viewState.data.id) {
@@ -205,7 +226,19 @@ const handleConfirmEncontro = (encontroData) => {
             guests: encontroData.guests.length
         });
     }
+    showToast(`Encontro planeado! Convites enviados.`);
     encontroStore.cancelPlanning();
+};
+
+const showSharedReservation = (encontroData, invitedUser) => {
+    const restaurant = restaurantStore.restaurants.find(r => r.id === encontroData.restaurantId);
+    if(restaurant) {
+        goToView('sharedReservation', { 
+            encounter: encontroData,
+            currentUser: invitedUser,
+            restaurant: restaurant
+        });
+    }
 };
 
 const openSelectMenuItemModal = (props) => {
@@ -473,6 +506,7 @@ const handleConfirmReservation = (reservation) => {
 };
 const handleUpdateUser = (updatedData) => {
     Object.assign(userProfile, updatedData);
+    saveUserProfileToLocalStorage();
     showToast('Perfil atualizado com sucesso!');
 };
 const handleSearchNavigation = (item) => {
@@ -533,6 +567,8 @@ const closeCustomizeModal = () => {
             @open-dine-options="openDineOptionsModal" @toggle-favorite="toggleDishFavorite"
             @open-add-dish-modal="openAddDishModal" />
         <RestaurantDetailView v-if="viewState.name === 'restaurantDetail'" :restaurant="viewState.data"
+        :user-profile="userProfile"
+            :all-users="allUsers"
             @back-to-main="goBack" @open-action-modal="openActionModal" @open-add-dish-modal="openAddDishModal"
             @confirm-encontro="handleConfirmEncontro" @open-menu-item-select-modal="openSelectMenuItemModal"
             @open-customize-modal="openCustomizeModal" />
@@ -590,6 +626,14 @@ const closeCustomizeModal = () => {
         <CustomizeDishModal v-if="isCustomizeModalOpen" :dish="currentDishForAction" @close="closeCustomizeModal"
             @add-to-cart="handleUpdateCartItem" />
         <ChatModal />
+        <ReservationSharedView 
+            v-if="viewState.name === 'sharedReservation'"
+            :encounter="viewState.data.encounter"
+            :current-user="viewState.data.currentUser"
+            :restaurant="viewState.data.restaurant"
+            @back-to-main="goToView('home')"
+            @open-menu-item-select-modal="openSelectMenuItemModal"
+        />
         <div
             :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
             {{ toastMessage }}

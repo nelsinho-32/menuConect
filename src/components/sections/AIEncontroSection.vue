@@ -32,7 +32,9 @@
 
         <div v-if="activeTab === 'manual'">
             <ManualEncontroPlanner 
-               :restaurant="restaurant" 
+                :restaurant="restaurant"
+                :current-user="userProfile"
+                :all-users="allUsers"
                 @confirm-encontro="payload => $emit('confirmEncontro', payload)"
                 @open-table-select-modal="isTableSelectModalOpen = true"
                 @open-menu-item-select-modal="payload => $emit('openMenuItemSelectModal', payload)"
@@ -58,10 +60,12 @@ import ManualEncontroPlanner from '../ManualEncontroPlanner.vue';
 import SelectTableModal from '../SelectTableModal.vue';
 
 const props = defineProps({
-    restaurant: { type: Object, required: true }
+    restaurant: { type: Object, required: true },
+    userProfile: { type: Object, required: true },
+    allUsers: { type: Array, required: true }
 });
 
-defineEmits(['confirmEncontro', 'openMenuItemSelectModal', 'openCustomizeModal']);
+defineEmits(['confirmEncontro', 'openMenuItemSelectModal', 'openCustomizeModal', 'openTableSelectModal']);
 
 const encontroStore = useEncontroStore(); // 2. INICIALIZAR O ARMAZÉM
 const activeTab = ref('ai');

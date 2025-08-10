@@ -5,14 +5,16 @@ export const useEncontroStore = defineStore('encontro', () => {
   const plannedEncontro = ref(null);
   const isPlanning = computed(() => plannedEncontro.value !== null);
 
-  function startPlanning(restaurant) {
+  function startPlanning(restaurant, organizer) {
     plannedEncontro.value = {
       restaurantId: restaurant.id,
       restaurantName: restaurant.name,
-      step: 'table', // table -> dateTime -> guests -> menu -> payment -> confirm
+      step: 'table', // table -> dateTime -> guests -> invites -> menu -> payment -> confirm
+      organizerName: organizer.name,
       selectedTable: null,
       dateTime: null,
-      guests: [{ id: 1, name: 'Convidado 1', menu: {} }],
+      // O organizador já começa como o primeiro convidado
+      guests: [{ id: organizer.id, name: organizer.name, menu: {} }],
       paymentOption: 'local',
     };
   }
@@ -33,16 +35,27 @@ export const useEncontroStore = defineStore('encontro', () => {
     }
   }
 
-  function setGuests(count) {
+  function setGuests(count, organizer) {
     if (plannedEncontro.value) {
-      plannedEncontro.value.guests = Array.from({ length: count }, (_, i) => ({
-        id: i + 1, name: `Convidado ${i + 1}`, menu: {}
-      }));
-      plannedEncontro.value.step = 'menu';
+      const guests = [{ id: organizer.id, name: organizer.name, menu: {} }];
+      for (let i = 1; i < count; i++) {
+        guests.push({ id: `guest-${i}`, name: `Convidado ${i + 1}`, menu: {}, isPlaceholder: true });
+      }
+      plannedEncontro.value.guests = guests;
+      plannedEncontro.value.step = 'invites';
+    }
+  }
+
+  function inviteGuest(guestIndex, userToInvite) {
+    if (plannedEncontro.value && plannedEncontro.value.guests[guestIndex]) {
+        plannedEncontro.value.guests[guestIndex] = {
+            id: userToInvite.id,
+            name: userToInvite.name,
+            menu: {}
+        };
     }
   }
   
-
   function setGuestMenu(guestId, itemType, item) {
     if (plannedEncontro.value) {
         const guest = plannedEncontro.value.guests.find(g => g.id === guestId);
@@ -65,6 +78,6 @@ export const useEncontroStore = defineStore('encontro', () => {
 
   return {
     plannedEncontro, isPlanning, startPlanning, setTable, setDateTime,
-    setGuests, setGuestMenu, setPayment, cancelPlanning
+    setGuests, inviteGuest, setGuestMenu, setPayment, cancelPlanning
   }
 })
