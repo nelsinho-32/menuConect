@@ -20,6 +20,9 @@
                <button @click="navigate('orderHistory')" class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
                 <span class="mr-3">🧾</span> Histórico de Pedidos
               </button>
+              <button v-if="userStore.isCompanyUser()" @click="navigate('tableManagement')" class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
+                   <span class="mr-3">📊</span> Gestão de Mesas
+                 </button>
               <div class="border-t my-2"></div>
               <a href="#" class="flex items-center px-4 py-2 text-red-600 hover:bg-red-50">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-3"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>

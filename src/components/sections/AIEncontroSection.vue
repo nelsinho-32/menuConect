@@ -32,10 +32,11 @@
 
         <div v-if="activeTab === 'manual'">
             <ManualEncontroPlanner 
-                :restaurant="restaurant" 
+               :restaurant="restaurant" 
                 @confirm-encontro="payload => $emit('confirmEncontro', payload)"
                 @open-table-select-modal="isTableSelectModalOpen = true"
-                @open-menu-item-select-modal="payload => { console.log('2. Evento RECEBIDO em AIEncontroSection e RE-EMITIDO'); $emit('openMenuItemSelectModal', payload) }"
+                @open-menu-item-select-modal="payload => $emit('openMenuItemSelectModal', payload)"
+                @open-customize-modal="payload => $emit('openCustomizeModal', payload)"
             />
         </div>
 
@@ -60,7 +61,7 @@ const props = defineProps({
     restaurant: { type: Object, required: true }
 });
 
-defineEmits(['confirmEncontro', 'openMenuItemSelectModal']);
+defineEmits(['confirmEncontro', 'openMenuItemSelectModal', 'openCustomizeModal']);
 
 const encontroStore = useEncontroStore(); // 2. INICIALIZAR O ARMAZÉM
 const activeTab = ref('ai');

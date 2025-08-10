@@ -15,6 +15,7 @@ import CartView from './components/CartView.vue';
 import FavoriteRestaurantsView from './components/views/FavoriteRestaurantsView.vue';
 import FavoriteDishesView from './components/views/FavoriteDishesView.vue';
 import OrderHistoryView from './components/views/OrderHistoryView.vue';
+import TableManagementView from './components/views/TableManagementView.vue';
 
 // Modais
 import ActionModal from './components/ActionModal.vue';
@@ -26,6 +27,7 @@ import AddDishModal from './components/AddDishModal.vue';
 import PixModal from './components/PixModal.vue';
 import CustomizeDishModal from './components/CustomizeDishModal.vue';
 import SelectMenuItemModal from './components/SelectMenuItemModal.vue';
+import TableDetailModal from './components/TableDetailModal.vue';
 
 // 1. IMPORTAÇÃO DAS STORES DO PINIA
 import { useRestaurantStore } from './stores/restaurantStore';
@@ -56,6 +58,8 @@ const orderHistory = reactive([]);
 const isCustomizeModalOpen = ref(false);
 const isSelectMenuItemModalOpen = ref(false);
 const menuItemModalProps = ref({});
+const isTableDetailModalOpen = ref(false);
+const currentTableForDetail = ref(null);
 
 
 const viewState = reactive({
@@ -164,9 +168,9 @@ const handleUpdateMap = (updatedLayout) => {
     }
 };
 
-const addToCart = ({ dish, quantity, customization = null, isPlanned = false }) => {
+const addToCart = ({ dish, quantity, isPlanned = false, dineOption = 'delivery', customization = null }) => {
     const cartItemId = `${dish.id}-${Date.now()}`;
-    cart.push({ ...dish, quantity, customization, isPlanned, cartItemId });
+    cart.push({ ...dish, quantity, customization, isPlanned, dineOption, cartItemId });
     closeCustomizeModal();
     closeActionModal();
     showToast(`${quantity}x '${dish.dishName}' adicionado!`);
@@ -175,12 +179,15 @@ const addToCart = ({ dish, quantity, customization = null, isPlanned = false }) 
 const handleConfirmEncontro = (encontroData) => {
     if (encontroData.paymentOption === 'agora') {
         encontroData.guests.forEach(guest => {
-            Object.values(guest.menu).forEach(itemName => {
-                if (itemName) {
-                    const dish = restaurantStore.allDishes.find(d => d.name === itemName || d.dishName === itemName);
-                    if (dish) {
-                        addToCart({ dish, quantity: 1, isPlanned: true });
-                    }
+            Object.values(guest.menu).forEach(dishObject => {
+                if (dishObject && dishObject.id) {
+                    addToCart({ 
+                        dish: dishObject, 
+                        quantity: 1, 
+                        isPlanned: true, 
+                        dineOption: 'dine-in', // Encontros planeados são para comer no local
+                        customization: dishObject.customization || null 
+                    });
                 }
             });
         });
@@ -209,7 +216,7 @@ const handleMenuItemSelection = (item) => {
     const categoryMap = { 'Entradas': 'starter', 'Prato Principal': 'main', 'Sobremesas': 'dessert', 'Bebidas': 'drink' };
     const menuKey = categoryMap[category];
     if (menuKey) {
-        encontroStore.setGuestMenu(guest.id, menuKey, item.name);
+        encontroStore.setGuestMenu(guest.id, menuKey, item);
     }
     isSelectMenuItemModalOpen.value = false;
 };
@@ -245,12 +252,21 @@ const updateQuantity = ({ cartItemId, quantity }) => {
     }
 };
 
-const handleUpdateCartItem = ({ dish, quantity, customization }) => {
-    const itemIndex = cart.findIndex(item => item.cartItemId === dish.cartItemId);
-    if (itemIndex !== -1) {
-        const originalDineOption = cart[itemIndex].dineOption;
-        cart[itemIndex] = { ...dish, quantity, customization, dineOption: originalDineOption, cartItemId: dish.cartItemId };
-        showToast(`Item '${dish.dishName}' atualizado.`);
+const handleUpdateCartItem = (customizedData) => {
+    // Se estivermos a editar a partir do planeador de encontros
+    if (dishModalProps.value.plannerData) {
+        const { guest, categoryKey } = dishModalProps.value.plannerData;
+        const customizedItem = {
+            ...currentDishForAction.value,
+            customization: customizedData.customization
+        };
+        encontroStore.setGuestMenu(guest.id, categoryKey, customizedItem);
+    } else { // Se estivermos a editar a partir do carrinho
+        const itemIndex = cart.findIndex(item => item.cartItemId === customizedData.dish.cartItemId);
+        if (itemIndex !== -1) {
+            cart[itemIndex].customization = customizedData.customization;
+            showToast(`Item '${customizedData.dish.dishName}' atualizado.`);
+        }
     }
     closeCustomizeModal();
 };
@@ -307,7 +323,7 @@ const closePaymentModal = () => isPaymentModalOpen.value = false;
 // função para lidar com o sucesso do pagamento
 const handlePaymentSuccess = () => {
     if (cart.length === 0) return;
-
+    const newOrderId = Date.now();
     // AQUI ESTÁ A CORREÇÃO: Voltamos a guardar uma cópia profunda do carrinho.
     const itemsForHistory = JSON.parse(JSON.stringify(cart));
 
@@ -320,8 +336,16 @@ const handlePaymentSuccess = () => {
     const finalDeliveryFee = deliveryRestaurants.size * 5.00;
     const finalSubtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
+    // AQUI ESTÁ A LIGAÇÃO: Associa o ID do pedido à reserva ativa
+    if (userReservations.bookedTable) {
+        if (!userReservations.bookedTable.orderIds) {
+            userReservations.bookedTable.orderIds = [];
+        }
+        userReservations.bookedTable.orderIds.push(newOrderId);
+    }
+
     const newOrder = {
-        id: Date.now(),
+        id: newOrderId,
         date: new Date().toISOString(),
         items: itemsForHistory, // Guarda a versão completa dos itens
         total: finalSubtotal + finalDeliveryFee
@@ -337,8 +361,21 @@ const handlePaymentSuccess = () => {
     showToast("Pedido realizado com sucesso! Obrigado!");
 };
 
+const openTableDetailModal = (table) => {
+    currentTableForDetail.value = table;
+    isTableDetailModalOpen.value = true;
+};
+
+const handleUpdateTableStatus = ({ tableId, status }) => {
+    // A gestão é feita pelo clique na modal, mas o evento vem da TableDetailModal
+    const restaurant = restaurantStore.restaurants.find(r => r.tables.some(t => t.id === tableId));
+    if (restaurant) {
+        restaurantStore.updateTableStatus({ restaurantId: restaurant.id, tableId, newStatus: status });
+    }
+};
 
 const orderNowFromAction = ({ dish, quantity }) => {
+    // Pedidos "agora" são assumidos como entrega, a não ser que o fluxo mude
     addToCart({ dish, quantity, dineOption: 'delivery' });
     goToView('cart');
 };
@@ -381,6 +418,14 @@ const handleBooking = ({ restaurant, table, dateTime, guests }) => {
         guests: guests,
         status: 'confirmed'
     };
+
+    // AQUI ESTÁ A ALTERAÇÃO: Chama a store para atualizar o estado da mesa
+    restaurantStore.updateTableStatus({
+        restaurantId: restaurant.id,
+        tableId: table.id,
+        newStatus: 'occupied'
+    });
+
     const minutesToBooking = (dateTime.getTime() - new Date().getTime()) / (1000 * 60);
     if (minutesToBooking > 60) {
         confirmationModalMessage.value = "Você receberá uma mensagem no WhatsApp 1 hora antes para confirmar sua reserva. Você terá 20 minutos para responder.";
@@ -445,9 +490,12 @@ const openAddDishModal = (props = {}) => {
 };
 const closeAddDishModal = () => isAddDishModalOpen.value = false;
 
-const openCustomizeModal = (dish) => {
-    currentDishForAction.value = dish;
-    isActionModalOpen.value = false; // Fecha a modal de ação
+const openCustomizeModal = (payload) => {
+    // Se vier do carrinho, 'payload' é o item. Se vier do planeador, é um objeto com 'guest' e 'item'.
+    currentDishForAction.value = payload.item || payload;
+    // Guarda os dados extras do planeador para podermos salvar no sítio certo
+    dishModalProps.value.plannerData = payload.guest ? payload : null;
+    isActionModalOpen.value = false;
     isCustomizeModalOpen.value = true;
 };
 
@@ -483,7 +531,8 @@ const closeCustomizeModal = () => {
             @open-add-dish-modal="openAddDishModal" />
         <RestaurantDetailView v-if="viewState.name === 'restaurantDetail'" :restaurant="viewState.data"
             @back-to-main="goBack" @open-action-modal="openActionModal" @open-add-dish-modal="openAddDishModal"
-            @confirm-encontro="handleConfirmEncontro" @open-menu-item-select-modal="openSelectMenuItemModal" />
+            @confirm-encontro="handleConfirmEncontro" @open-menu-item-select-modal="openSelectMenuItemModal"
+            @open-customize-modal="openCustomizeModal" />
         <ReservationView v-if="viewState.name === 'reservation'" :restaurant="viewState.data"
             :user-reservations="userReservations" @back-to-main="goBack" @update-map="handleUpdateMap"
             @book-table="handleBooking" @join-waitlist="handleWaitingList"
@@ -505,9 +554,13 @@ const closeCustomizeModal = () => {
         <FavoriteDishesView v-if="viewState.name === 'favoriteDishes'" :favorite-dishes="favoritedDishesList"
             @toggle-favorite="toggleDishFavorite" @open-action-modal="openActionModal"
             @open-dine-options="openDineOptionsModal" @back-to-main="goToView('home')" />
-        <OrderHistoryView v-if="viewState.name === 'orderHistory'"
-            :order-history="orderHistory"
+        <OrderHistoryView v-if="viewState.name === 'orderHistory'" :order-history="orderHistory"
             @back-to-main="goToView('home')" />
+        <TableManagementView v-if="viewState.name === 'tableManagement'" :order-history="orderHistory"
+            @open-table-detail-modal="openTableDetailModal" />
+        <TableDetailModal v-if="isTableDetailModalOpen" :table="currentTableForDetail" :reservations="userReservations"
+            :order-history="orderHistory" :user-profile="userProfile" @close="isTableDetailModalOpen = false"
+            @update-status="handleUpdateTableStatus" />
 
         <Footer />
 
@@ -531,6 +584,8 @@ const closeCustomizeModal = () => {
         <SelectMenuItemModal v-if="isSelectMenuItemModalOpen" :menu-items="menuItemModalProps.menuItems"
             :category="menuItemModalProps.category" @close="isSelectMenuItemModalOpen = false"
             @item-selected="handleMenuItemSelection" />
+        <CustomizeDishModal v-if="isCustomizeModalOpen" :dish="currentDishForAction" @close="closeCustomizeModal"
+            @add-to-cart="handleUpdateCartItem" />
         <div
             :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
             {{ toastMessage }}

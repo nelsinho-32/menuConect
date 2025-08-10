@@ -100,6 +100,17 @@ export const useRestaurantStore = defineStore('restaurants', () => {
       }
   }
 
+  function updateTableStatus({ restaurantId, tableId, newStatus }) {
+    const restaurant = restaurants.find(r => r.id === restaurantId);
+    if (restaurant && restaurant.tables) {
+        const table = restaurant.tables.find(t => t.id === tableId);
+        if (table) {
+            table.status = newStatus;
+            saveRestaurantsToLocalStorage();
+        }
+    }
+  }
+
   return { 
     restaurants, 
     allDishes, 
@@ -108,6 +119,7 @@ export const useRestaurantStore = defineStore('restaurants', () => {
     loadRestaurantsFromLocalStorage, 
     addRestaurant,
     addDish,
-    updateRestaurantMap
+    updateRestaurantMap,
+    updateTableStatus
   }
 })

@@ -42,6 +42,7 @@ export const useEncontroStore = defineStore('encontro', () => {
     }
   }
   
+
   function setGuestMenu(guestId, itemType, item) {
     if (plannedEncontro.value) {
         const guest = plannedEncontro.value.guests.find(g => g.id === guestId);

@@ -49,10 +49,10 @@
                     <div v-for="guest in encontroStore.plannedEncontro.guests" :key="guest.id" class="bg-gray-50 p-4 rounded-lg">
                         <p class="font-semibold text-gray-800">{{ guest.name }}</p>
                         <div class="grid grid-cols-2 gap-x-4 gap-y-2 mt-2 text-sm">
-                            <MenuItemSelector label="Entrada" :selected-item="guest.menu.starter" @select="() => $emit('openMenuItemSelectModal', { guest, category: 'Entradas', menuItems: menuByCategory.Entradas })" />
-                            <MenuItemSelector label="Prato Principal" :selected-item="guest.menu.main" @select="() => $emit('openMenuItemSelectModal', { guest, category: 'Prato Principal', menuItems: menuByCategory['Prato Principal'] })" />
-                            <MenuItemSelector label="Sobremesa" :selected-item="guest.menu.dessert" @select="() => $emit('openMenuItemSelectModal', { guest, category: 'Sobremesas', menuItems: menuByCategory.Sobremesas })" />
-                            <MenuItemSelector label="Bebida" :selected-item="guest.menu.drink" @select="() => $emit('openMenuItemSelectModal', { guest, category: 'Bebidas', menuItems: menuByCategory.Bebidas })" />
+                            <MenuItemSelector label="Entrada" :selected-item="guest.menu.starter" @select="() => $emit('openMenuItemSelectModal', { guest, category: 'Entradas', menuItems: menuByCategory.Entradas })" @customize="() => $emit('openCustomizeModal', { guest, item: guest.menu.starter, categoryKey: 'starter' })" />
+                            <MenuItemSelector label="Prato Principal" :selected-item="guest.menu.main" @select="() => $emit('openMenuItemSelectModal', { guest, category: 'Prato Principal', menuItems: menuByCategory['Prato Principal'] })" @customize="() => $emit('openCustomizeModal', { guest, item: guest.menu.main, categoryKey: 'main' })" />
+                            <MenuItemSelector label="Sobremesa" :selected-item="guest.menu.dessert" @select="() => $emit('openMenuItemSelectModal', { guest, category: 'Sobremesas', menuItems: menuByCategory.Sobremesas })" @customize="() => $emit('openCustomizeModal', { guest, item: guest.menu.dessert, categoryKey: 'dessert' })" />
+                            <MenuItemSelector label="Bebida" :selected-item="guest.menu.drink" @select="() => $emit('openMenuItemSelectModal', { guest, category: 'Bebidas', menuItems: menuByCategory.Bebidas })" @customize="() => $emit('openCustomizeModal', { guest, item: guest.menu.drink, categoryKey: 'drink' })" />
                         </div>
                     </div>
                 </div>
@@ -91,7 +91,7 @@ import { useEncontroStore } from '@/stores/encontroStore';
 import MenuItemSelector from './MenuItemSelector.vue';
 
 const props = defineProps({ restaurant: { type: Object, required: true } });
-const emit = defineEmits(['confirmEncontro', 'openTableSelectModal', 'openMenuItemSelectModal']);
+const emit = defineEmits(['confirmEncontro', 'openTableSelectModal', 'openMenuItemSelectModal', 'openCustomizeModal']);
 
 const encontroStore = useEncontroStore();
 const guestCount = ref(1);

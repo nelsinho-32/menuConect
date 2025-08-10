@@ -29,7 +29,8 @@
         <AIEncontroSection 
             :restaurant="restaurant"
             @confirm-encontro="payload => $emit('confirmEncontro', payload)"
-            @open-menu-item-select-modal="payload => { console.log('3. Evento RECEBIDO em RestaurantDetailView e RE-EMITIDO'); $emit('openMenuItemSelectModal', payload) }"
+            @open-menu-item-select-modal="payload => $emit('openMenuItemSelectModal', payload)"
+            @open-customize-modal="payload => $emit('openCustomizeModal', payload)"
         />
 
         <RestaurantMenu 
@@ -51,7 +52,7 @@ const props = defineProps({
 });
 
 // O evento 'openAddDishModal' é agora re-emitido para o App.vue com os dados necessários
-defineEmits(['backToMain', 'openActionModal', 'openAddDishModal', 'confirmEncontro', 'openMenuItemSelectModal']);
+defineEmits(['backToMain', 'openActionModal', 'openAddDishModal', 'confirmEncontro', 'openMenuItemSelectModal', 'openCustomizeModal']);
 
 const carouselImages = ref([]);
 const currentImageIndex = ref(0);
