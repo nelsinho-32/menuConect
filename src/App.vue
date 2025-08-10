@@ -64,6 +64,8 @@ const isSelectMenuItemModalOpen = ref(false);
 const menuItemModalProps = ref({});
 const isTableDetailModalOpen = ref(false);
 const currentTableForDetail = ref(null);
+const isNotificationsOpen = ref(false);
+const isFriendsChatOpen = ref(false);
 
 
 const viewState = reactive({
@@ -91,6 +93,16 @@ const allUsers = reactive([
     { id: 456, name: 'João Santos', avatarUrl: 'https://placehold.co/256x256/60a5fa/ffffff?text=J' },
 ]);
 
+const notifications = reactive([
+    { id: 1, icon: '📅', message: 'Sua reserva no Terraço Lisboa foi confirmada!', time: 'há 5 minutos', bgColor: 'bg-blue-100' },
+    { id: 2, icon: '✅', message: 'Seu pedido no Bruttão Burger foi entregue.', time: 'há 1 hora', bgColor: 'bg-green-100' },
+    { id: 3, icon: '💬', message: 'Maria Silva enviou uma nova mensagem.', time: 'há 3 horas', bgColor: 'bg-indigo-100' }
+]);
+
+const friends = reactive([
+    { id: 1, name: 'Maria Silva', avatarUrl: 'https://placehold.co/100x100/f87171/ffffff?text=M', online: true, status: 'Online' },
+    { id: 2, name: 'João Santos', avatarUrl: 'https://placehold.co/100x100/60a5fa/ffffff?text=J', online: false, status: 'Offline há 2 horas' }
+]);
 
 const isConfirmationModalOpen = ref(false);
 const confirmationModalMessage = ref('');
@@ -183,7 +195,15 @@ const handleAddDish = (newDishData) => {
     closeAddDishModal();
 };
 
+const toggleNotifications = () => {
+    isNotificationsOpen.value = !isNotificationsOpen.value;
+    if (isNotificationsOpen.value) isFriendsChatOpen.value = false; // Fecha o outro painel
+};
 
+const toggleFriendsChat = () => {
+    isFriendsChatOpen.value = !isFriendsChatOpen.value;
+    if (isFriendsChatOpen.value) isNotificationsOpen.value = false; // Fecha o outro painel
+};
 
 const handleUpdateMap = (updatedLayout) => {
     if (viewState.data && viewState.data.id) {
@@ -205,12 +225,12 @@ const handleConfirmEncontro = (encontroData) => {
         encontroData.guests.forEach(guest => {
             Object.values(guest.menu).forEach(dishObject => {
                 if (dishObject && dishObject.id) {
-                    addToCart({ 
-                        dish: dishObject, 
-                        quantity: 1, 
-                        isPlanned: true, 
+                    addToCart({
+                        dish: dishObject,
+                        quantity: 1,
+                        isPlanned: true,
                         dineOption: 'dine-in', // Encontros planeados são para comer no local
-                        customization: dishObject.customization || null 
+                        customization: dishObject.customization || null
                     });
                 }
             });
@@ -232,8 +252,8 @@ const handleConfirmEncontro = (encontroData) => {
 
 const showSharedReservation = (encontroData, invitedUser) => {
     const restaurant = restaurantStore.restaurants.find(r => r.id === encontroData.restaurantId);
-    if(restaurant) {
-        goToView('sharedReservation', { 
+    if (restaurant) {
+        goToView('sharedReservation', {
             encounter: encontroData,
             currentUser: invitedUser,
             restaurant: restaurant
@@ -547,8 +567,11 @@ const closeCustomizeModal = () => {
 <template>
     <div>
         <app-header :cart-item-count="cartItemCount" :user="userProfile"
-            :searchable-items="restaurantStore.searchableItems" :active-view="viewState.name" @navigate="goToView"
-            @search-navigate="handleSearchNavigation" />
+            :searchable-items="restaurantStore.searchableItems" :active-view="viewState.name"
+            :is-notifications-open="isNotificationsOpen" :is-friends-chat-open="isFriendsChatOpen"
+            :notifications="notifications" :friends="friends" @navigate="goToView"
+            @search-navigate="handleSearchNavigation" @toggle-notifications="toggleNotifications"
+            @toggle-friends-chat="toggleFriendsChat" />
         <HomeView v-if="viewState.name === 'home'" :restaurants="restaurantStore.featuredRestaurants"
             :trending-dishes="trendingDishes" :frequent-dishes="frequentDishes" :favorite-dishes="favoriteDishes"
             :favorite-restaurants="favoriteRestaurants" :all-dishes="restaurantStore.allDishes"
@@ -567,9 +590,8 @@ const closeCustomizeModal = () => {
             @open-dine-options="openDineOptionsModal" @toggle-favorite="toggleDishFavorite"
             @open-add-dish-modal="openAddDishModal" />
         <RestaurantDetailView v-if="viewState.name === 'restaurantDetail'" :restaurant="viewState.data"
-        :user-profile="userProfile"
-            :all-users="allUsers"
-            @back-to-main="goBack" @open-action-modal="openActionModal" @open-add-dish-modal="openAddDishModal"
+            :user-profile="userProfile" :all-users="allUsers" @back-to-main="goBack"
+            @open-action-modal="openActionModal" @open-add-dish-modal="openAddDishModal"
             @confirm-encontro="handleConfirmEncontro" @open-menu-item-select-modal="openSelectMenuItemModal"
             @open-customize-modal="openCustomizeModal" />
         <ReservationView v-if="viewState.name === 'reservation'" :restaurant="viewState.data"
@@ -626,14 +648,9 @@ const closeCustomizeModal = () => {
         <CustomizeDishModal v-if="isCustomizeModalOpen" :dish="currentDishForAction" @close="closeCustomizeModal"
             @add-to-cart="handleUpdateCartItem" />
         <ChatModal />
-        <ReservationSharedView 
-            v-if="viewState.name === 'sharedReservation'"
-            :encounter="viewState.data.encounter"
-            :current-user="viewState.data.currentUser"
-            :restaurant="viewState.data.restaurant"
-            @back-to-main="goToView('home')"
-            @open-menu-item-select-modal="openSelectMenuItemModal"
-        />
+        <ReservationSharedView v-if="viewState.name === 'sharedReservation'" :encounter="viewState.data.encounter"
+            :current-user="viewState.data.currentUser" :restaurant="viewState.data.restaurant"
+            @back-to-main="goToView('home')" @open-menu-item-select-modal="openSelectMenuItemModal" />
         <div
             :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
             {{ toastMessage }}
