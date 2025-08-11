@@ -118,6 +118,10 @@ const trendingDishes = computed(() => restaurantStore.allDishes.slice(0, 4));
 const frequentDishes = computed(() => restaurantStore.allDishes.slice(1, 5));
 const favoritedRestaurantsList = computed(() => restaurantStore.restaurants.filter(r => favoriteRestaurants.has(r.id)));
 const favoritedDishesList = computed(() => restaurantStore.allDishes.filter(d => favoriteDishes.has(d.id)).slice(0, 10));
+const newlyAddedRestaurants = computed(() => {
+    return restaurantStore.restaurants.filter(r => r.isNew).slice(0, 6);
+});
+
 
 
 // --- PERSISTÊNCIA ---
@@ -591,15 +595,19 @@ const closeCustomizeModal = () => {
             @toggle-friends-chat="toggleFriendsChat" />
         <HomeView v-if="viewState.name === 'home'"
             :restaurants="restaurantStore.featuredRestaurants"
+            :new-restaurants="newlyAddedRestaurants"
             :trending-dishes="trendingDishes"
             :frequent-dishes="frequentDishes"
             :favorite-dishes="favoriteDishes"
             :favorite-restaurants="favoriteRestaurants"
             :all-dishes="restaurantStore.allDishes"
+            @open-action-modal="openActionModal"
+            @open-dine-options="openDineOptionsModal"
             @toggle-dish-favorite="toggleDishFavorite"
             @toggle-restaurant-favorite="toggleRestaurantFavorite"
             @request-reservation="restaurant => goToView('reservation', restaurant)"
             @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)"
+            @open-payment-modal="openCheckout"
             @open-menu-modal="openMenuModal" />
         <RestaurantsView v-if="viewState.name === 'restaurants'" :restaurants="restaurantStore.restaurants"
             :favorite-restaurants="favoriteRestaurants" @toggle-favorite="toggleRestaurantFavorite"

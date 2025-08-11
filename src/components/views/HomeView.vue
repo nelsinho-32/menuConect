@@ -17,7 +17,9 @@
             @toggle-favorite="dish => $emit('toggleDishFavorite', dish)"
         />
         <DiscoverSection 
-            :restaurants="restaurants"
+            v-if="newRestaurants.length > 0"
+            title="Descubra Novos Lugares"
+            :restaurants="newRestaurants"
             :favorite-restaurants="favoriteRestaurants"
             @toggle-favorite="restaurant => $emit('toggleRestaurantFavorite', restaurant)"
             @request-reservation="restaurant => $emit('requestReservation', restaurant)"
@@ -43,7 +45,8 @@ const props = defineProps({
     frequentDishes: Array, // Este prop já não é usado, mas mantemo-lo para evitar erros
     favoriteDishes: Set,
     favoriteRestaurants: Set,
-    allDishes: Array
+    allDishes: Array,
+    newRestaurants: Array,
 });
 
 defineEmits([
@@ -61,5 +64,10 @@ const favoritedDishesList = computed(() => {
     return props.allDishes
         .filter(dish => props.favoriteDishes.has(dish.id))
         .slice(0, 8);
+});
+
+// AQUI ESTÁ A ALTERAÇÃO: Nova propriedade para limitar os restaurantes
+const discoverRestaurants = computed(() => {
+    return props.restaurants.slice(0, 6);
 });
 </script>
