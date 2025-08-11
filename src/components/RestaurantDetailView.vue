@@ -24,6 +24,9 @@
                 </div>
             </div>
             <h1 class="text-4xl md:text-5xl font-extrabold mt-6">{{ restaurant.name }}</h1>
+            <button @click="$emit('viewRoute', restaurant)" class="mt-6 bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600">
+                Ver Rota
+            </button>
         </div>
 
          <AIEncontroSection 
@@ -57,7 +60,7 @@ const props = defineProps({
 });
 
 // O evento 'openAddDishModal' é agora re-emitido para o App.vue com os dados necessários
-defineEmits(['backToMain', 'openActionModal', 'openAddDishModal', 'confirmEncontro', 'openMenuItemSelectModal', 'openCustomizeModal', 'openTableSelectModal']);
+defineEmits(['backToMain', 'openActionModal', 'openAddDishModal', 'confirmEncontro', 'openMenuItemSelectModal', 'openCustomizeModal', 'openTableSelectModal', 'viewRoute']);
 
 const carouselImages = ref([]);
 const currentImageIndex = ref(0);

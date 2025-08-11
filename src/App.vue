@@ -17,6 +17,7 @@ import FavoriteDishesView from './components/views/FavoriteDishesView.vue';
 import OrderHistoryView from './components/views/OrderHistoryView.vue';
 import TableManagementView from './components/views/TableManagementView.vue';
 import ReservationSharedView from './components/views/ReservationSharedView.vue';
+import RouteView from './components/views/RouteView.vue';
 
 // Modais
 import ActionModal from './components/ActionModal.vue';
@@ -175,6 +176,10 @@ const goToView = (name, data = null) => {
     viewState.name = name;
     viewState.data = data;
     window.scrollTo(0, 0);
+};
+
+const handleViewRoute = (restaurant) => {
+    goToView('route', restaurant);
 };
 
 const goBack = () => goToView(previousViewState.value || 'home');
@@ -593,7 +598,8 @@ const closeCustomizeModal = () => {
             :user-profile="userProfile" :all-users="allUsers" @back-to-main="goBack"
             @open-action-modal="openActionModal" @open-add-dish-modal="openAddDishModal"
             @confirm-encontro="handleConfirmEncontro" @open-menu-item-select-modal="openSelectMenuItemModal"
-            @open-customize-modal="openCustomizeModal" />
+            @open-customize-modal="openCustomizeModal" @view-route="handleViewRoute" />
+        <RouteView v-if="viewState.name === 'route'" :restaurant="viewState.data" @back="goBack" />
         <ReservationView v-if="viewState.name === 'reservation'" :restaurant="viewState.data"
             :user-reservations="userReservations" @back-to-main="goBack" @update-map="handleUpdateMap"
             @book-table="handleBooking" @join-waitlist="handleWaitingList"
