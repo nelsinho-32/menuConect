@@ -1,65 +1,88 @@
 <template>
-    <div 
-        @click="$emit('viewRestaurant', restaurant)"
-        class="restaurant-card w-80 md:w-96 h-96 rounded-2xl overflow-hidden relative text-white flex flex-col justify-end p-6 bg-cover bg-center cursor-pointer" 
-        :style="{ backgroundImage: `url(${restaurant.imageUrl})` }"
-    >
+    <div @click="$emit('viewRestaurant', restaurant)" class="restaurant-card bg-gray-900 rounded-2xl shadow-lg overflow-hidden group cursor-pointer relative h-80">
+        <img :src="restaurant.imageUrl" :alt="restaurant.name"
+            class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300 ease-in-out">
+        
         <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
-        <button 
-            @click.stop="$emit('toggleFavorite', restaurant)" 
-            title="Adicionar aos favoritos" 
-            class="absolute top-4 right-4 bg-white/20 backdrop-blur-sm p-2 rounded-full transition-colors duration-200 hover:bg-white/40 z-20"
-        >
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" 
-                 :fill="isFavorited ? '#facc15' : 'none'" 
-                 stroke="#facc15" 
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                 class="transition-all duration-200"
-            >
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+
+        <button @click.stop.prevent="$emit('toggleFavorite', restaurant)"
+            class="absolute top-3 right-3 bg-white/20 backdrop-blur-sm p-2 rounded-full text-white hover:bg-white/30 transition-colors z-10">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                <path v-if="isFavorited" d="M3.612 15.443c-.343.197-.734-.044-.657-.449l.75-4.226-3.06-2.925c-.28-.266-.125-.715.225-.76l4.24-.607 1.89-3.834c.175-.354.63-.354.805 0l1.89 3.834 4.24.607c.35.045.504.494.225.76l-3.06 2.925.75 4.226c.077.405-.314.646-.657.449L8 13.197l-4.388 2.246z"/>
+                <path v-else d="M2.866 14.85c-.078.444.36.791.746.593l4.39-2.256 4.389 2.256c.386.198.824-.149.746-.592l-.83-4.73 3.522-3.356c.33-.314.16-.888-.282-.95l-4.898-.696L8.465.792a.513.513 0 0 0-.927 0L5.354 5.12l-4.898.696c-.441.062-.612.636-.283.95l3.523 3.356-.83 4.73zm4.905-2.767-3.686 1.894.694-3.957a.565.565 0 0 0-.163-.505L1.71 6.745l4.052-.576a.525.525 0 0 0 .393-.288L8 2.223l1.847 3.658a.525.525 0 0 0 .393.288l4.052.575-2.906 2.77a.565.565 0 0 0-.163.506l.694 3.957-3.686-1.894a.503.503 0 0 0-.461 0z"/>
             </svg>
         </button>
-        <div class="relative z-10">
-            <span class="inline-block bg-white/20 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1 rounded-full mb-2">{{ restaurant.cuisine }}</span>
-            <h3 class="text-3xl font-bold leading-tight">{{ restaurant.name }}</h3>
-            
-            <!-- ATUALIZADO: Div para exibir a razão -->
-            <div class="text-sm text-gray-200 mt-2 min-h-[40px] transition-opacity duration-300" :class="reason ? 'opacity-100' : 'opacity-0'">
-                <p v-if="!isLoading">{{ reason }}</p>
+
+        <div class="relative w-full h-full flex flex-col justify-between p-5 text-white">
+            <div>
+                <div class="flex items-center gap-4">
+                    <img :src="restaurant.logoUrl" :alt="`Logo de ${restaurant.name}`"
+                        class="w-16 h-16 rounded-full object-cover border-4 border-white/20 shadow-md flex-shrink-0">
+                    <div class="flex-grow">
+                        <p class="text-sm font-semibold text-white/80">{{ restaurant.cuisine.toUpperCase() }}</p>
+                        <h3 class="font-bold text-xl leading-tight mt-1">{{ restaurant.name }}</h3>
+                    </div>
+                </div>
+
+                <div class="mt-2 flex items-center text-xs text-white/80">
+                    <div class="flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10zm0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
+                        <span>{{ restaurant.city }}</span>
+                    </div>
+                    <span class="mx-2">·</span>
+                    <div v-if="distanceInKm" class="flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 1a.5.5 0 0 0 0 1h1.11l.401 1.604 1.498 7.985A.5.5 0 0 0 4 12h1a2 2 0 1 0 0 4 2 2 0 0 0 0-4h7a2 2 0 1 0 0 4 2 2 0 0 0 0-4h1a.5.5 0 0 0 .491-.408l1.5-8A.5.5 0 0 0 14.5 3H2.89l-.405-1.621A.5.5 0 0 0 2 1H.5zM6 14a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm7 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0zM9 5.5V7h1.5a.5.5 0 0 1 0 1H9v1.5a.5.5 0 0 1-1 0V8H6.5a.5.5 0 0 1 0-1H8V5.5a.5.5 0 0 1 1 0z"/></svg>
+                        <span>~{{ distanceInKm }} km</span>
+                    </div>
+                </div>
             </div>
 
-            <div class="mt-4 flex gap-4">
-                 <button @click.stop="$emit('requestReservation', restaurant)" class="bg-white text-gray-800 font-bold py-2 px-4 rounded-full text-sm">Reservar Mesa</button>
-                 <button @click.stop="getReason" class="bg-transparent border border-white/50 text-white font-bold py-2 px-4 rounded-full text-sm hover:bg-white/10" :disabled="isLoading">
-                    <span v-if="!isLoading && !reason">Por que visitar? ✨</span>
-                    <span v-if="!isLoading && reason">Esconder dica</span>
-                    <span v-if="isLoading">Analisando...</span>
-                 </button>
+            <div class="flex gap-2 opacity-1 group-hover:opacity-100 transition-opacity duration-300">
+                <button @click.stop.prevent="$emit('requestReservation', restaurant)" class="w-full bg-white/20 backdrop-blur text-white px-4 py-2 rounded-lg font-bold hover:bg-white/30 text-sm">Reservar Mesa</button>
+                <button @click.stop.prevent="$emit('openMenuModal', restaurant)" class="w-full bg-white/20 backdrop-blur text-white px-4 py-2 rounded-lg font-bold hover:bg-white/30 text-sm">Ver Cardápio</button>
             </div>
         </div>
     </div>
 </template>
-<script setup>
-import { ref } from 'vue';
-import { callGemini } from '../services/geminiService.js';
-const props = defineProps({
-  restaurant: { type: Object, required: true },
-  isFavorited: { type: Boolean, default: false }
-});
-defineEmits(['toggleFavorite', 'requestReservation', 'viewRestaurant']);
-const reason = ref('');
-const isLoading = ref(false);
 
-async function getReason() {
-    if (reason.value) {
-        reason.value = '';
-        return;
+<script setup>
+import { computed } from 'vue';
+
+const props = defineProps({
+    restaurant: { type: Object, required: true },
+    isFavorited: { type: Boolean, default: false }
+});
+
+defineEmits(['toggleFavorite', 'requestReservation', 'viewRestaurant', 'openMenuModal']);
+
+const userLocation = {
+    latitude: -6.72059849726947,
+    longitude: -35.54075065892938
+};
+
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const straightLineDistance = R * c;
+    
+    const roadDistanceFactor = 1.4;
+    return (straightLineDistance * roadDistanceFactor).toFixed(1);
+};
+
+const distanceInKm = computed(() => {
+    if (props.restaurant.location && props.restaurant.location.lat && props.restaurant.location.lng) {
+        return calculateDistance(
+            userLocation.latitude,
+            userLocation.longitude,
+            props.restaurant.location.lat,
+            props.restaurant.location.lng
+        );
     }
-    isLoading.value = true;
-    const schema = { type: "OBJECT", properties: { reason: { type: "STRING" } } };
-    const prompt = `Crie uma frase curta e convidativa (máximo 15 palavras) dizendo por que uma pessoa deveria visitar o restaurante '${props.restaurant.name}', que é do tipo '${props.restaurant.cuisine}'. Foque na atmosfera ou na experiência.`;
-    const result = await callGemini(prompt, schema);
-    reason.value = (result && result.reason) ? result.reason : `Um lugar perfeito para apreciar a culinária ${props.restaurant.cuisine}!`;
-    isLoading.value = false;
-}
+    return null;
+});
 </script>

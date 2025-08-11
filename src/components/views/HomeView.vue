@@ -22,6 +22,7 @@
             @toggle-favorite="restaurant => $emit('toggleRestaurantFavorite', restaurant)"
             @request-reservation="restaurant => $emit('requestReservation', restaurant)"
             @view-restaurant="restaurant => $emit('viewRestaurant', restaurant)"
+            @open-menu-modal="restaurant => $emit('openMenuModal', restaurant)"
         />
         <AIFavoriteSection @open-payment-modal="() => $emit('openPaymentModal')"/>
         <AICreateDish :all-dishes="allDishes" />
@@ -52,7 +53,8 @@ defineEmits([
     'toggleRestaurantFavorite', 
     'requestReservation', 
     'viewRestaurant', 
-    'openPaymentModal'
+    'openPaymentModal',
+    'openMenuModal'
 ]);
 
 const favoritedDishesList = computed(() => {

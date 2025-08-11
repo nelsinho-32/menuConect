@@ -34,6 +34,7 @@
                 @toggle-favorite="restaurant => $emit('toggleFavorite', restaurant)"
                 @request-reservation="restaurant => $emit('requestReservation', restaurant)"
                 @view-restaurant="restaurant => $emit('viewRestaurant', restaurant)"
+                @open-menu-modal="restaurant => $emit('openMenuModal', restaurant)"
             />
         </div>
     </div>
@@ -51,7 +52,7 @@ const props = defineProps({
     favoriteRestaurants: { type: Set, required: true }
 });
 
-defineEmits(['toggleFavorite', 'requestReservation', 'viewRestaurant', 'openAddRestaurantModal']);
+defineEmits(['toggleFavorite', 'requestReservation', 'viewRestaurant', 'openAddRestaurantModal', 'openMenuModal']);
 
 // --- INÍCIO: NOVA LÓGICA DE FILTRAGEM ---
 

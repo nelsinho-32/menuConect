@@ -68,6 +68,8 @@
                         <label for="lng" class="block text-sm font-medium text-gray-700">Longitude</label>
                         <input type="text" id="lng" v-model="newRestaurant.location.lng" required placeholder="-34.123456" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                     </div>
+                    <label for="city" class="block text-sm font-medium text-gray-700">Cidade (Ex: João Pessoa, PB)</label>
+                    <input type="text" id="city" v-model="newRestaurant.city" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
 
                 <div class="p-6 bg-gray-50 rounded-b-2xl flex gap-3 -m-6 mt-6 pt-6">

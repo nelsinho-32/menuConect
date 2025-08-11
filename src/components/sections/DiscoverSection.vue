@@ -15,6 +15,7 @@
                     @toggle-favorite="restaurant => $emit('toggleFavorite', restaurant)"
                     @request-reservation="restaurant => $emit('requestReservation', restaurant)"
                     @view-restaurant="restaurant => $emit('viewRestaurant', restaurant)"
+                    @open-menu-modal="restaurant => $emit('openMenuModal', restaurant)"
                 />
             </div>
             
@@ -32,7 +33,7 @@ defineProps({
     restaurants: { type: Array, required: true },
     favoriteRestaurants: { type: Set, required: true }
 });
-defineEmits(['toggleFavorite', 'requestReservation', 'viewRestaurant']);
+defineEmits(['toggleFavorite', 'requestReservation', 'viewRestaurant', 'openMenuModal']);
 
 const scrollContainer = ref(null);
 const isScrollAtStart = ref(true);

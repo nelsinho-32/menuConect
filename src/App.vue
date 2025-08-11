@@ -31,6 +31,7 @@ import CustomizeDishModal from './components/CustomizeDishModal.vue';
 import SelectMenuItemModal from './components/SelectMenuItemModal.vue';
 import TableDetailModal from './components/TableDetailModal.vue';
 import ChatModal from './components/ChatModal.vue';
+import MenuModal from './components/MenuModal.vue';
 
 // 1. IMPORTAÇÃO DAS STORES DO PINIA
 import { useRestaurantStore } from './stores/restaurantStore';
@@ -67,6 +68,8 @@ const isTableDetailModalOpen = ref(false);
 const currentTableForDetail = ref(null);
 const isNotificationsOpen = ref(false);
 const isFriendsChatOpen = ref(false);
+const isMenuModalOpen = ref(false); // 2. Adicionar novo estado
+const currentRestaurantForMenu = ref(null);
 
 
 const viewState = reactive({
@@ -264,6 +267,15 @@ const showSharedReservation = (encontroData, invitedUser) => {
             restaurant: restaurant
         });
     }
+};
+
+const openMenuModal = (restaurant) => {
+    currentRestaurantForMenu.value = restaurant;
+    isMenuModalOpen.value = true;
+};
+
+const closeMenuModal = () => {
+    isMenuModalOpen.value = false;
 };
 
 const openSelectMenuItemModal = (props) => {
@@ -577,19 +589,23 @@ const closeCustomizeModal = () => {
             :notifications="notifications" :friends="friends" @navigate="goToView"
             @search-navigate="handleSearchNavigation" @toggle-notifications="toggleNotifications"
             @toggle-friends-chat="toggleFriendsChat" />
-        <HomeView v-if="viewState.name === 'home'" :restaurants="restaurantStore.featuredRestaurants"
-            :trending-dishes="trendingDishes" :frequent-dishes="frequentDishes" :favorite-dishes="favoriteDishes"
-            :favorite-restaurants="favoriteRestaurants" :all-dishes="restaurantStore.allDishes"
-            @open-action-modal="openActionModal" @open-dine-options="openDineOptionsModal"
-            @toggle-dish-favorite="toggleDishFavorite" @toggle-restaurant-favorite="toggleRestaurantFavorite"
+        <HomeView v-if="viewState.name === 'home'"
+            :restaurants="restaurantStore.featuredRestaurants"
+            :trending-dishes="trendingDishes"
+            :frequent-dishes="frequentDishes"
+            :favorite-dishes="favoriteDishes"
+            :favorite-restaurants="favoriteRestaurants"
+            :all-dishes="restaurantStore.allDishes"
+            @toggle-dish-favorite="toggleDishFavorite"
+            @toggle-restaurant-favorite="toggleRestaurantFavorite"
             @request-reservation="restaurant => goToView('reservation', restaurant)"
             @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)"
-            @open-payment-modal="openCheckout" />
+            @open-menu-modal="openMenuModal" />
         <RestaurantsView v-if="viewState.name === 'restaurants'" :restaurants="restaurantStore.restaurants"
             :favorite-restaurants="favoriteRestaurants" @toggle-favorite="toggleRestaurantFavorite"
             @request-reservation="restaurant => goToView('reservation', restaurant)"
             @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)"
-            @open-add-restaurant-modal="openAddRestaurantModal" />
+            @open-add-restaurant-modal="openAddRestaurantModal" @open-menu-modal="openMenuModal" />
         <DishesView v-if="viewState.name === 'dishes'" :dishes="restaurantStore.allDishes"
             :favorite-dishes="favoriteDishes" @open-action-modal="openActionModal"
             @open-dine-options="openDineOptionsModal" @toggle-favorite="toggleDishFavorite"
@@ -617,7 +633,7 @@ const closeCustomizeModal = () => {
             :favorite-restaurants="favoritedRestaurantsList" @toggle-favorite="toggleRestaurantFavorite"
             @request-reservation="restaurant => goToView('reservation', restaurant)"
             @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)"
-            @back-to-main="goToView('home')" />
+            @back-to-main="goToView('home')" @open-menu-modal="openMenuModal" />
         <FavoriteDishesView v-if="viewState.name === 'favoriteDishes'" :favorite-dishes="favoritedDishesList"
             @toggle-favorite="toggleDishFavorite" @open-action-modal="openActionModal"
             @open-dine-options="openDineOptionsModal" @back-to-main="goToView('home')" />
@@ -657,6 +673,12 @@ const closeCustomizeModal = () => {
         <ReservationSharedView v-if="viewState.name === 'sharedReservation'" :encounter="viewState.data.encounter"
             :current-user="viewState.data.currentUser" :restaurant="viewState.data.restaurant"
             @back-to-main="goToView('home')" @open-menu-item-select-modal="openSelectMenuItemModal" />
+        <MenuModal
+            v-if="isMenuModalOpen"
+            :restaurant="currentRestaurantForMenu"
+            @close="closeMenuModal"
+            @open-action-modal="openActionModal"
+        />
         <div
             :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
             {{ toastMessage }}
