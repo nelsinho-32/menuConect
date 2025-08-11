@@ -18,6 +18,7 @@ import OrderHistoryView from './components/views/OrderHistoryView.vue';
 import TableManagementView from './components/views/TableManagementView.vue';
 import ReservationSharedView from './components/views/ReservationSharedView.vue';
 import RouteView from './components/views/RouteView.vue';
+import DashboardView from './components/views/DashboardView.vue';
 
 // Modais
 import ActionModal from './components/ActionModal.vue';
@@ -593,21 +594,14 @@ const closeCustomizeModal = () => {
             :notifications="notifications" :friends="friends" @navigate="goToView"
             @search-navigate="handleSearchNavigation" @toggle-notifications="toggleNotifications"
             @toggle-friends-chat="toggleFriendsChat" />
-        <HomeView v-if="viewState.name === 'home'"
-            :restaurants="restaurantStore.featuredRestaurants"
-            :new-restaurants="newlyAddedRestaurants"
-            :trending-dishes="trendingDishes"
-            :frequent-dishes="frequentDishes"
-            :favorite-dishes="favoriteDishes"
-            :favorite-restaurants="favoriteRestaurants"
-            :all-dishes="restaurantStore.allDishes"
-            @open-action-modal="openActionModal"
-            @open-dine-options="openDineOptionsModal"
-            @toggle-dish-favorite="toggleDishFavorite"
+        <HomeView v-if="viewState.name === 'home'" :restaurants="restaurantStore.featuredRestaurants"
+            :new-restaurants="newlyAddedRestaurants" :trending-dishes="trendingDishes" :frequent-dishes="frequentDishes"
+            :favorite-dishes="favoriteDishes" :favorite-restaurants="favoriteRestaurants"
+            :all-dishes="restaurantStore.allDishes" @open-action-modal="openActionModal"
+            @open-dine-options="openDineOptionsModal" @toggle-dish-favorite="toggleDishFavorite"
             @toggle-restaurant-favorite="toggleRestaurantFavorite"
             @request-reservation="restaurant => goToView('reservation', restaurant)"
-            @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)"
-            @open-payment-modal="openCheckout"
+            @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)" @open-payment-modal="openCheckout"
             @open-menu-modal="openMenuModal" />
         <RestaurantsView v-if="viewState.name === 'restaurants'" :restaurants="restaurantStore.restaurants"
             :favorite-restaurants="favoriteRestaurants" @toggle-favorite="toggleRestaurantFavorite"
@@ -640,8 +634,8 @@ const closeCustomizeModal = () => {
         <FavoriteRestaurantsView v-if="viewState.name === 'favoriteRestaurants'"
             :favorite-restaurants="favoritedRestaurantsList" @toggle-favorite="toggleRestaurantFavorite"
             @request-reservation="restaurant => goToView('reservation', restaurant)"
-            @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)"
-            @back-to-main="goToView('home')" @open-menu-modal="openMenuModal" />
+            @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)" @back-to-main="goToView('home')"
+            @open-menu-modal="openMenuModal" />
         <FavoriteDishesView v-if="viewState.name === 'favoriteDishes'" :favorite-dishes="favoritedDishesList"
             @toggle-favorite="toggleDishFavorite" @open-action-modal="openActionModal"
             @open-dine-options="openDineOptionsModal" @back-to-main="goToView('home')" />
@@ -652,6 +646,8 @@ const closeCustomizeModal = () => {
         <TableDetailModal v-if="isTableDetailModalOpen" :table="currentTableForDetail" :reservations="userReservations"
             :order-history="orderHistory" :user-profile="userProfile" @close="isTableDetailModalOpen = false"
             @update-status="handleUpdateTableStatus" />
+        <DashboardView v-if="viewState.name === 'dashboard'" :reservations="userReservations"
+            :order-history="orderHistory" @navigate-to="goToView" />
 
         <Footer />
 
@@ -681,12 +677,8 @@ const closeCustomizeModal = () => {
         <ReservationSharedView v-if="viewState.name === 'sharedReservation'" :encounter="viewState.data.encounter"
             :current-user="viewState.data.currentUser" :restaurant="viewState.data.restaurant"
             @back-to-main="goToView('home')" @open-menu-item-select-modal="openSelectMenuItemModal" />
-        <MenuModal
-            v-if="isMenuModalOpen"
-            :restaurant="currentRestaurantForMenu"
-            @close="closeMenuModal"
-            @open-action-modal="openActionModal"
-        />
+        <MenuModal v-if="isMenuModalOpen" :restaurant="currentRestaurantForMenu" @close="closeMenuModal"
+            @open-action-modal="openActionModal" />
         <div
             :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
             {{ toastMessage }}

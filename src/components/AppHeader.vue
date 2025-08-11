@@ -31,6 +31,9 @@
                 class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
                 <span class="mr-3">🧾</span> Histórico de Pedidos
               </button>
+              <button v-if="userStore.isCompanyUser()" @click="navigate('dashboard')" class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
+                   <span class="mr-3">🏠</span> Dashboard
+                 </button>
               <button v-if="userStore.isCompanyUser()" @click="navigate('tableManagement')"
                 class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
                 <span class="mr-3">📊</span> Gestão de Mesas
