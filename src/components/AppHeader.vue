@@ -31,11 +31,11 @@
                 class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
                 <span class="mr-3">🧾</span> Histórico de Pedidos
               </button>
-              <button v-if="userStore.isCompanyUser()" @click="navigate('dashboard')"
+              <button v-if="authStore.currentUser && (authStore.currentUser.role === 'empresa' || authStore.currentUser.role === 'admin')" @click="navigate('dashboard')"
                 class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
                 <span class="mr-3">🏠</span> Dashboard
               </button>
-              <button v-if="userStore.isCompanyUser()" @click="navigate('tableManagement')"
+              <button v-if="authStore.currentUser && (authStore.currentUser.role === 'empresa' || authStore.currentUser.role === 'admin')" @click="navigate('tableManagement')"
                 class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
                 <span class="mr-3">📊</span> Gestão de Mesas
               </button>
@@ -168,7 +168,9 @@ import { useUserStore } from '@/stores/userStore';
 import { useChatStore } from '@/stores/chatStore';
 import NotificationsPanel from './NotificationsPanel.vue'; // Importar
 import FriendsChatPanel from './FriendsChatPanel.vue';
+import { useAuthStore } from '@/stores/authStore';
 
+const authStore = useAuthStore();
 const chatStore = useChatStore();
 const userStore = useUserStore();
 

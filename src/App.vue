@@ -43,6 +43,7 @@ import { useUserStore } from './stores/userStore';
 import { useChatStore } from './stores/chatStore';
 import { useAuthStore } from './stores/authStore';
 import { useUserDataStore } from './stores/userDataStore';
+import { useReservationStore } from './stores/reservationStore';
 
 // 2. Ativação das stores para usar no componente
 const restaurantStore = useRestaurantStore();
@@ -51,6 +52,7 @@ const chatStore = useChatStore();
 const userStore = useUserStore();
 const authStore = useAuthStore();
 const userDataStore = useUserDataStore();
+const reservationStore = useReservationStore();
 
 
 // --- ESTADO REATIVO (EXISTENTE) ---
@@ -78,7 +80,6 @@ const isMenuModalOpen = ref(false);
 const currentRestaurantForMenu = ref(null);
 const isConfirmationModalOpen = ref(false);
 const confirmationModalMessage = ref('');
-const userReservations = reactive({ bookedTable: null, waitingForTable: null });
 // Dados mockados que serão substituídos por dados reais da API
 const allUsers = reactive([]);
 const notifications = reactive([]);
@@ -100,15 +101,6 @@ const userProfile = computed(() => authStore.currentUser || {
     name: 'Visitante',
     email: '',
     avatarUrl: 'https://placehold.co/256x256/cccccc/ffffff?text=?'
-});
-
-
-onMounted(() => {
-    // Se o usuário estiver logado, busca os dados da aplicação
-    if (authStore.isAuthenticated) {
-        restaurantStore.fetchRestaurantsFromAPI();
-        // ... (carregar outros dados como favoritos, histórico, etc., que também virão da API no futuro)
-    }
 });
 
 // --- DADOS COMPUTADOS ---
@@ -154,6 +146,11 @@ const loadUserProfileFromLocalStorage = () => {
 
 // Quando a aplicação é montada, carrega tudo a partir das fontes corretas.
 onMounted(() => {
+    if (authStore.isAuthenticated) {
+        restaurantStore.fetchRestaurantsFromAPI();
+        userDataStore.fetchAllUserData();
+        reservationStore.fetchAllUserReservations();
+    }
     restaurantStore.fetchRestaurantsFromAPI();
     loadOrderHistoryFromLocalStorage();
     loadUserProfileFromLocalStorage();
@@ -221,6 +218,15 @@ const handleAddRestaurant = async (newRestaurantData) => {
     }
 };
 
+const handleCancelWaitlist = async (waitlistEntry) => {
+    try {
+        await reservationStore.leaveWaitlist(waitlistEntry.restaurantId);
+        showToast(`Você saiu da fila de espera de ${waitlistEntry.restaurantName}.`);
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
+    }
+};
+
 const handleAddDish = async (newDishData) => {
     const added = await restaurantStore.addDish(newDishData);
     if (added) {
@@ -241,10 +247,55 @@ const toggleFriendsChat = () => {
     if (isFriendsChatOpen.value) isNotificationsOpen.value = false; // Fecha o outro painel
 };
 
-const handleUpdateMap = (updatedLayout) => {
+const handleUpdateMap = async (updatedLayout) => {
     if (viewState.data && viewState.data.id) {
-        restaurantStore.updateRestaurantMap(viewState.data.id, updatedLayout);
-        showToast('Mapa salvo com sucesso!');
+        try {
+            await restaurantStore.updateRestaurantMap(viewState.data.id, updatedLayout);
+            showToast('Mapa salvo com sucesso!');
+        } catch (errorMsg) {
+            showToast(errorMsg, 'error');
+        }
+    }
+};
+
+const handleBooking = async ({ restaurant, table, date, time, guests }) => {
+    try {
+        // CORREÇÃO: Construímos a string de data e hora manualmente,
+        // garantindo que não há conversão de fuso horário.
+        const bookingTimeForAPI = `${date} ${time}:00`; // Formato: "YYYY-MM-DD HH:MM:SS"
+
+        const reservationData = {
+            restaurantId: restaurant.id,
+            tableId: table.id,
+            bookingTime: bookingTimeForAPI,
+            guests: guests
+        };
+
+        const success = await reservationStore.createReservation(reservationData);
+
+        if (success) {
+            restaurantStore.updateTableStatus({
+                restaurantId: restaurant.id,
+                tableId: table.id,
+                newStatus: 'occupied'
+            });
+
+            confirmationModalMessage.value = "A sua reserva foi confirmada com sucesso!";
+            isConfirmationModalOpen.value = true;
+            
+            // A lógica do WhatsApp precisa da data completa, então criamos o objeto aqui.
+            const [year, month, day] = date.split('-').map(Number);
+            const [hours, minutes] = time.split(':').map(Number);
+            const localDateTime = new Date(year, month - 1, day, hours, minutes);
+
+            setTimeout(() => {
+                sendWhatsAppConfirmation({ restaurant, table, dateTime: localDateTime, guests });
+            }, 500);
+            
+            goToView('myReservations');
+        }
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
     }
 };
 
@@ -519,66 +570,34 @@ const sendWhatsAppConfirmation = (reservationDetails) => {
     showToast("Confirmação enviada para o WhatsApp!");
 };
 
-const handleBooking = ({ restaurant, table, dateTime, guests }) => {
-    userReservations.bookedTable = {
-        restaurantId: restaurant.id,
-        tableId: table.id,
-        restaurantName: restaurant.name,
-        restaurantImage: restaurant.imageUrl,
-        bookingTime: dateTime,
-        guests: guests,
-        status: 'confirmed'
-    };
-
-    // AQUI ESTÁ A ALTERAÇÃO: Chama a store para atualizar o estado da mesa
-    restaurantStore.updateTableStatus({
-        restaurantId: restaurant.id,
-        tableId: table.id,
-        newStatus: 'occupied'
-    });
-
-    const minutesToBooking = (dateTime.getTime() - new Date().getTime()) / (1000 * 60);
-    if (minutesToBooking > 60) {
-        confirmationModalMessage.value = "Você receberá uma mensagem no WhatsApp 1 hora antes para confirmar sua reserva. Você terá 20 minutos para responder.";
-    } else if (minutesToBooking > 20) {
-        confirmationModalMessage.value = "Sua reserva é para breve! Enviaremos uma mensagem de confirmação 15 minutos antes.";
-    } else {
-        confirmationModalMessage.value = "Sua reserva é para agora! Por favor, dirija-se ao restaurante.";
-    }
-    isConfirmationModalOpen.value = true;
-    setTimeout(() => {
-        sendWhatsAppConfirmation({ restaurant, table, dateTime, guests });
-    }, 500);
-};
-
-const handleWaitingList = ({ restaurant, table }) => {
-    userReservations.waitingForTable = {
-        restaurantId: restaurant.id,
-        tableId: table.id,
-        restaurantName: restaurant.name,
-        restaurantImage: restaurant.imageUrl,
-        position: 2
-    };
-    showToast(`Você entrou na fila de espera para a mesa ${table.id} em ${restaurant.name}.`);
-};
-
-const handleCancellation = (type) => {
-    if (type === 'booked' && userReservations.bookedTable) {
-        showToast(`Reserva da mesa ${userReservations.bookedTable.tableId} cancelada.`);
-        userReservations.bookedTable = null;
-    }
-    if (type === 'waiting' && userReservations.waitingForTable) {
-        showToast(`Saída da fila de espera da mesa ${userReservations.waitingForTable.tableId}.`);
-        userReservations.waitingForTable = null;
+const handleWaitingList = async ({ restaurant }) => {
+    try {
+        await reservationStore.joinWaitlist(restaurant.id);
+        showToast(`Você entrou na fila de espera de ${restaurant.name}.`);
+        goToView('myReservations');
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
     }
 };
 
-const handleConfirmReservation = (reservation) => {
-    if (userReservations.bookedTable && userReservations.bookedTable.tableId === reservation.tableId) {
-        userReservations.bookedTable.status = 'confirmed';
+const handleCancellation = async (reservation) => {
+    try {
+        await reservationStore.cancelReservation(reservation.id);
+        showToast(`Reserva da mesa ${reservation.tableId} cancelada.`);
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
+    }
+};
+
+const handleConfirmReservation = async (reservation) => {
+    try {
+        await reservationStore.confirmReservation(reservation.id);
         showToast(`Reserva para a mesa ${reservation.tableId} confirmada!`);
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
     }
 };
+
 const handleUpdateUser = async (updatedData) => {
     try {
         await authStore.updateProfile(updatedData);
@@ -665,12 +684,13 @@ const closeCustomizeModal = () => {
                     @open-customize-modal="openCustomizeModal" @view-route="handleViewRoute" />
                 <RouteView v-if="viewState.name === 'route'" :restaurant="viewState.data" @back="goBack" />
                 <ReservationView v-if="viewState.name === 'reservation'" :restaurant="viewState.data"
-                    :user-reservations="userReservations" @back-to-main="goBack" @update-map="handleUpdateMap"
-                    @book-table="handleBooking" @join-waitlist="handleWaitingList"
+                    :user-reservations="reservationStore.userReservations.booked" @back-to-main="goBack"
+                    @update-map="handleUpdateMap" @book-table="handleBooking" @join-waitlist="handleWaitingList"
                     @cancel-reservation="handleCancellation('booked')" />
-                <MyReservationsView v-if="viewState.name === 'myReservations'" :reservations="userReservations"
-                    @cancel-reservation="handleCancellation" @confirm-reservation="handleConfirmReservation"
-                    @back-to-main="goBack" />
+                <MyReservationsView v-if="viewState.name === 'myReservations'"
+                    :reservations="reservationStore.userReservations" @cancel-reservation="handleCancellation"
+                    @confirm-reservation="handleConfirmReservation" @back-to-main="goBack"
+                    @cancel-waitlist="handleCancelWaitlist" />
                 <UserProfileView v-if="viewState.name === 'userProfile'" :user="userProfile"
                     @update-user="handleUpdateUser" @back-to-main="goBack" />
                 <CartView v-if="viewState.name === 'cart'" :cart-items="cart" :all-dishes="restaurantStore.allDishes"

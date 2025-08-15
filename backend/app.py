@@ -1,6 +1,6 @@
-# backend/app.py (VERSÃO COMPLETA E SEM DUPLICADOS)
+print("--- O SERVIDOR FOI REINICIADO COM O CÓDIGO CORRETO! ---")
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, url_for
 from flask_cors import CORS
 import mysql.connector
 from decimal import Decimal
@@ -115,16 +115,29 @@ def get_restaurants():
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM restaurants")
+        cursor.execute("SELECT id, name, cuisine, city, lat, lng, imageUrl, logoUrl, isNew, map_layout FROM restaurants")
         restaurants = cursor.fetchall()
+
         for r in restaurants:
             r['location'] = {'lat': r.pop('lat'), 'lng': r.pop('lng')}
+            
+            # CORREÇÃO PARA CARREGAR O MAPA:
+            # Se a coluna map_layout tiver dados, o Python carrega-os como string.
+            # json.loads() transforma essa string de volta num objeto/dicionário.
+            map_layout_data = json.loads(r['map_layout']) if r.get('map_layout') else {}
+            r['tables'] = map_layout_data.get('tables', [])
+            r['mapElements'] = map_layout_data.get('mapElements', [])
+            r['floorPatternId'] = map_layout_data.get('floorPatternId', 'floor-marble')
+            r.pop('map_layout', None) # Remove a coluna original para não ser enviada.
+
             cursor.execute("SELECT id, name AS dishName, description, price, imageUrl, category, restaurant_id FROM dishes WHERE restaurant_id = %s", (r['id'],))
             r['menu'] = cursor.fetchall()
+            
         cursor.close()
         conn.close()
         return jsonify(restaurants)
-    except mysql.connector.Error as err: return jsonify({"error": str(err)}), 500
+    except mysql.connector.Error as err: 
+        return jsonify({"error": str(err)}), 500
 
 @app.route('/api/restaurants', methods=['POST'])
 @token_required(roles=['admin'])
@@ -260,6 +273,310 @@ def remove_favorite_dish(current_user, dish_id):
         conn.close()
         return jsonify({"message": "Prato removido dos favoritos."})
     except mysql.connector.Error as err: return jsonify({"error": str(err)}), 500
+    
+# --- ROTAS DE RESERVAS ---
+@app.route('/api/reservations', methods=['POST'])
+@token_required()
+def create_reservation(current_user):
+    data = request.get_json()
+    
+    # --- A CORREÇÃO ESTÁ AQUI ---
+    # A variável 'booking_time_str' estava em falta na extração de dados.
+    restaurant_id = data.get('restaurantId')
+    table_id = data.get('tableId')
+    booking_time_str = data.get('bookingTime')
+    guests = data.get('guests')
+    # ---------------------------
+
+    if not all([restaurant_id, table_id, booking_time_str, guests]):
+        return jsonify({"error": "Todos os campos da reserva são obrigatórios."}), 400
+    
+    booking_time_mysql = booking_time_str
+    
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        check_sql = "SELECT id FROM reservations WHERE restaurant_id = %s AND table_id = %s AND booking_time = %s AND status IN ('confirmed', 'pending')"
+        cursor.execute(check_sql, (restaurant_id, table_id, booking_time_mysql))
+        if cursor.fetchone():
+            return jsonify({"error": "Esta mesa já está reservada para este horário."}), 409
+
+        sql = "INSERT INTO reservations (user_id, restaurant_id, table_id, booking_time, guests, status) VALUES (%s, %s, %s, %s, %s, %s)"
+        val = (current_user['id'], restaurant_id, table_id, booking_time_mysql, guests, 'pending')
+        cursor.execute(sql, val)
+        conn.commit()
+        new_id = cursor.lastrowid
+        
+        # ATUALIZA O STATUS DA MESA NO MAPA PARA 'occupied'
+        cursor.execute("SELECT map_layout FROM restaurants WHERE id = %s", (restaurant_id,))
+        result = cursor.fetchone()
+        if result and result['map_layout']:
+            map_layout = json.loads(result['map_layout'])
+            for table in map_layout.get('tables', []):
+                if str(table.get('id')) == str(table_id):
+                    table['status'] = 'occupied'
+                    break
+            updated_map_json = json.dumps(map_layout)
+            cursor.execute("UPDATE restaurants SET map_layout = %s WHERE id = %s", (updated_map_json, restaurant_id))
+            conn.commit()
+        
+        return jsonify({"message": "Reserva criada com sucesso!", "reservationId": new_id}), 201
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+            
+
+@app.route('/api/my-reservations', methods=['GET'])
+@token_required()
+def get_my_reservations(current_user):
+    """Busca todas as reservas ativas para o usuário logado."""
+    sql = """
+        SELECT 
+            r.id, 
+            r.restaurant_id AS restaurantId,
+            res.name AS restaurantName,
+            res.imageUrl AS restaurantImage,
+            r.table_id AS tableId,
+            r.booking_time AS bookingTime,
+            r.guests,
+            r.status
+        FROM reservations r
+        JOIN restaurants res ON r.restaurant_id = res.id
+        WHERE r.user_id = %s AND r.status IN ('confirmed', 'pending')
+        ORDER BY r.booking_time ASC
+    """
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(sql, (current_user['id'],))
+        reservations = cursor.fetchall()
+        
+        # Converte o objeto datetime para uma string no formato ISO para ser compatível com JSON
+        for res in reservations:
+            if isinstance(res['bookingTime'], datetime.datetime):
+                res['bookingTime'] = res['bookingTime'].isoformat()
+
+        cursor.close()
+        conn.close()
+        return jsonify(reservations)
+    except mysql.connector.Error as err:
+        print(f"Erro do MySQL ao buscar reservas: {err}")
+        return jsonify({"error": str(err)}), 500
+
+@app.route('/api/restaurants/<int:restaurant_id>/map', methods=['PUT'])
+@token_required(roles=['admin', 'empresa'])
+def update_restaurant_map(current_user, restaurant_id):
+    if current_user['role'] == 'empresa' and current_user.get('restaurant_id') != restaurant_id:
+        return jsonify({"error": "Permissão negada para editar este mapa."}), 403
+    data = request.get_json()
+    map_layout_json = json.dumps(data)
+    sql = "UPDATE restaurants SET map_layout = %s WHERE id = %s"
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(sql, (map_layout_json, restaurant_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Mapa atualizado com sucesso!"})
+    except mysql.connector.Error as err: return jsonify({"error": str(err)}), 500
+    
+# --- ROTA PARA CANCELAR RESERVA ---
+@app.route('/api/reservations/<int:reservation_id>', methods=['DELETE'])
+@token_required()
+def cancel_reservation(current_user, reservation_id):
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # 1. Primeiro, busca os detalhes da reserva para saber qual mesa e restaurante
+        cursor.execute("SELECT restaurant_id, table_id FROM reservations WHERE id = %s AND user_id = %s", (reservation_id, current_user['id']))
+        reservation_to_cancel = cursor.fetchone()
+
+        if not reservation_to_cancel:
+            return jsonify({"error": "Reserva não encontrada ou permissão negada."}), 404
+        
+        restaurant_id = reservation_to_cancel['restaurant_id']
+        table_id = reservation_to_cancel['table_id']
+
+        # 2. Apaga a reserva
+        cursor.execute("DELETE FROM reservations WHERE id = %s", (reservation_id,))
+
+        # 3. ATUALIZA O STATUS DA MESA NO MAPA PARA 'available'
+        cursor.execute("SELECT map_layout FROM restaurants WHERE id = %s", (restaurant_id,))
+        result = cursor.fetchone()
+        if result and result['map_layout']:
+            map_layout = json.loads(result['map_layout'])
+            for table in map_layout.get('tables', []):
+                if str(table.get('id')) == str(table_id):
+                    table['status'] = 'available'
+                    break
+            
+            updated_map_json = json.dumps(map_layout)
+            cursor.execute("UPDATE restaurants SET map_layout = %s WHERE id = %s", (updated_map_json, restaurant_id))
+            
+        conn.commit()
+        return jsonify({"message": "Reserva cancelada com sucesso."})
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+# --- ROTAS PARA FILA DE ESPERA (WAITLIST) ---
+@app.route('/api/waitlist', methods=['POST'])
+@token_required()
+def join_waitlist(current_user):
+    """Adiciona o usuário à fila de espera de um restaurante."""
+    data = request.get_json()
+    restaurant_id = data.get('restaurantId')
+    if not restaurant_id:
+        return jsonify({"error": "restaurantId em falta."}), 400
+
+    sql = "INSERT INTO waitlist (user_id, restaurant_id) VALUES (%s, %s)"
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(sql, (current_user['id'], restaurant_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Você entrou na fila de espera!"}), 201
+    except mysql.connector.Error as err:
+        if err.errno == 1062: # Entrada duplicada
+            return jsonify({"message": "Você já está nesta fila de espera."}), 200
+        return jsonify({"error": str(err)}), 500
+
+@app.route('/api/my-waitlist', methods=['GET'])
+@token_required()
+def get_my_waitlist(current_user):
+    """Busca as filas de espera ativas do usuário."""
+    sql = """
+        SELECT 
+            w.id,
+            w.restaurant_id AS restaurantId,
+            res.name AS restaurantName,
+            res.imageUrl AS restaurantImage,
+            (SELECT COUNT(*) + 1 FROM waitlist w2 WHERE w2.restaurant_id = w.restaurant_id AND w2.id < w.id) AS position
+        FROM waitlist w
+        JOIN restaurants res ON w.restaurant_id = res.id
+        WHERE w.user_id = %s
+    """
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(sql, (current_user['id'],))
+        waitlist_entries = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify(waitlist_entries)
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    
+@app.route('/api/waitlist/<int:restaurant_id>', methods=['DELETE'])
+@token_required()
+def leave_waitlist(current_user, restaurant_id):
+    """Remove o usuário da fila de espera de um restaurante."""
+    sql = "DELETE FROM waitlist WHERE user_id = %s AND restaurant_id = %s"
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(sql, (current_user['id'], restaurant_id))
+        conn.commit()
+        
+        success = cursor.rowcount > 0
+        cursor.close()
+        conn.close()
+        
+        if success:
+            return jsonify({"message": "Você saiu da fila de espera."})
+        else:
+            return jsonify({"error": "Entrada na fila de espera não encontrada."}), 404
+            
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    
+# ROTA UNIFICADA PARA ATUALIZAR STATUS (CONFIRMAR/CANCELAR)
+@app.route('/api/reservations/<int:reservation_id>/status', methods=['PUT'])
+@token_required()
+def update_reservation_status(current_user, reservation_id):
+    data = request.get_json()
+    new_status = data.get('status') # Espera receber 'confirmed' ou 'cancelled'
+
+    if new_status not in ['confirmed', 'cancelled']:
+        return jsonify({"error": "Status inválido."}), 400
+
+    sql = "UPDATE reservations SET status = %s WHERE id = %s AND user_id = %s"
+    val = (new_status, reservation_id, current_user['id'])
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(sql, val)
+        conn.commit()
+        if cursor.rowcount > 0:
+            return jsonify({"message": f"Reserva atualizada para {new_status}."})
+        else:
+            return jsonify({"error": "Reserva não encontrada ou permissão negada."}), 404
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+            
+# ROTA ÚNICA PARA ATUALIZAR (CONFIRMAR) E DELETAR (CANCELAR)
+@app.route('/api/reservations/<int:reservation_id>', methods=['PUT', 'DELETE'])
+@token_required()
+def manage_reservation(current_user, reservation_id):
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        if request.method == 'PUT':
+            # Lógica de confirmação
+            sql = "UPDATE reservations SET status = 'confirmed' WHERE id = %s AND user_id = %s"
+            success_message = "Reserva confirmada com sucesso."
+        elif request.method == 'DELETE':
+            # Lógica de cancelamento
+            sql = "DELETE FROM reservations WHERE id = %s AND user_id = %s"
+            success_message = "Reserva cancelada com sucesso."
+
+        cursor.execute(sql, (reservation_id, current_user['id']))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": success_message})
+        else:
+            return jsonify({"error": "Reserva não encontrada ou permissão negada."}), 404
+            
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+    
+# --- ROTA DE DEPURAÇÃO ---
+@app.route('/debug-routes')
+def list_routes():
+    """Lista todas as rotas registadas na aplicação de forma segura."""
+    output = []
+    for rule in app.url_map.iter_rules():
+        # Exclui a rota 'static' padrão e a própria rota de debug
+        if rule.endpoint not in ('static', 'list_routes'):
+            methods = ','.join(sorted([m for m in rule.methods if m not in ['HEAD', 'OPTIONS']]))
+            line = {"rule": rule.rule, "endpoint": rule.endpoint, "methods": methods}
+            output.append(line)
+            
+    return jsonify(sorted(output, key=lambda r: r['rule']))
 
 # --- Executar a Aplicação ---
 if __name__ == '__main__':

@@ -1,11 +1,13 @@
 // src/stores/restaurantStore.js (VERSÃO ATUALIZADA)
 
+import { useAuthStore } from './authStore';
 import { reactive, computed } from 'vue'
 import { defineStore } from 'pinia'
 
 export const useRestaurantStore = defineStore('restaurants', () => {
 
   const restaurants = reactive([])
+
 
   const allDishes = computed(() => {
     return restaurants.flatMap(r => r.menu ? r.menu.map(item => ({...item, restaurantName: r.name, restaurantId: r.id})) : []);
@@ -25,6 +27,28 @@ export const useRestaurantStore = defineStore('restaurants', () => {
     });
     return items;
   });
+
+  async function updateRestaurantMap(restaurantId, layoutData) {
+  const authStore = useAuthStore(); // Precisa de acesso à authStore
+  if (!authStore.token) return Promise.reject("Não autenticado");
+
+  try {
+    const response = await fetch(`http://localhost:5000/api/restaurants/${restaurantId}/map`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authStore.token}`
+      },
+      body: JSON.stringify(layoutData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Falha ao salvar o mapa.');
+    return true;
+  } catch (error) {
+    console.error("Erro ao salvar o mapa:", error);
+    return Promise.reject(error.message);
+  }
+}
 
   // ---- ALTERAÇÃO PRINCIPAL AQUI ----
   // A função agora é 'async' para poder esperar pela resposta da API.
@@ -140,15 +164,7 @@ async function addRestaurant(newRestaurantData) {
   }
 }
 
-  function updateRestaurantMap(restaurantId, updatedLayout) {
-      const restaurantIndex = restaurants.findIndex(r => r.id === restaurantId);
-      if (restaurantIndex !== -1) {
-          restaurants[restaurantIndex].mapElements = updatedLayout.mapElements;
-          restaurants[restaurantIndex].tables = updatedLayout.tables;
-          restaurants[restaurantIndex].floorPatternId = updatedLayout.floorPatternId;
-          // saveRestaurantsToLocalStorage();
-      }
-  }
+  
 
   function updateTableStatus({ restaurantId, tableId, newStatus }) {
     const restaurant = restaurants.find(r => r.id === restaurantId);
@@ -170,6 +186,6 @@ async function addRestaurant(newRestaurantData) {
     addRestaurant,
     addDish,
     updateRestaurantMap,
-    updateTableStatus
+    updateTableStatus,
   }
 })

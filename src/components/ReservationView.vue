@@ -8,7 +8,7 @@
                 <p class="text-gray-500">Selecione uma mesa no mapa abaixo ou edite a disposição.</p>
             </div>
             <div class="flex flex-wrap gap-2">
-                <button v-if="!isEditMode && userStore.isCompanyUser()" @click="toggleEditMode" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">
+                <button v-if="!isEditMode && canEditMap" @click="toggleEditMode" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">
                     ✏️ Editar Mapa
                 </button>
                 <template v-if="isEditMode">
@@ -125,7 +125,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, computed } from 'vue';
+import { useAuthStore } from '@/stores/authStore';
 import { useUserStore } from '@/stores/userStore';
 import TableActionModal from './TableActionModal.vue';
 import BookingModal from './BookingModal.vue';
@@ -137,6 +138,7 @@ const props = defineProps({ restaurant: Object, userReservations: Object });
 const emit = defineEmits(['backToMain', 'bookTable', 'joinWaitlist', 'cancelReservation', 'updateMap']);
 
 const userStore = useUserStore();
+const authStore = useAuthStore();
 
 const icons = {
     bar: `<path d="M12.5 1a1 1 0 0 1 1 1v5.333a2.5 2.5 0 0 1-5 0V2a1 1 0 0 1 1-1h3zm-.5 4.333V2H9.5v3.333a1.5 1.5 0 0 0 3 0z"/><path d="M13 12.5a1 1 0 0 1 1-1h.5a1 1 0 0 1 0 2h-.5a1 1 0 0 1-1-1zm-10 0a1 1 0 0 1 1-1h.5a1 1 0 0 1 0 2H4a1 1 0 0 1-1-1zM5 6a1 1 0 0 1 1-1h5a1 1 0 0 1 0 2H6a1 1 0 0 1-1-1z"/>`,
@@ -160,6 +162,19 @@ onMounted(() => {
         Object.assign(tables, JSON.parse(JSON.stringify(props.restaurant.tables || [])));
         selectedFloorPatternId.value = props.restaurant.floorPatternId || 'floor-marble';
     }
+});
+
+// --- NOVA PROPRIEDADE COMPUTADA PARA PERMISSÕES ---
+const canEditMap = computed(() => {
+    if (!authStore.currentUser) return false;
+    // Admin pode sempre editar qualquer mapa
+    if (authStore.currentUser.role === 'admin') return true;
+    // Empresa só pode editar se o ID do restaurante corresponder ao seu
+    if (authStore.currentUser.role === 'empresa') {
+        return authStore.currentUser.restaurant_id === props.restaurant.id;
+    }
+    // Clientes não podem editar
+    return false;
 });
 
 const toolbox = reactive([
