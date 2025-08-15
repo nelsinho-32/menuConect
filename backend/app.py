@@ -1,5 +1,3 @@
-# backend/app.py (VERSÃO FINAL COM CORREÇÃO DE PREFERÊNCIAS)
-
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import mysql.connector
@@ -133,7 +131,7 @@ def get_restaurants():
         restaurants = cursor.fetchall()
         for restaurant in restaurants:
             restaurant['location'] = {'lat': restaurant.pop('lat'), 'lng': restaurant.pop('lng')}
-            cursor.execute("SELECT * FROM dishes WHERE restaurant_id = %s", (restaurant['id'],))
+            cursor.execute("SELECT id, name AS dishName, description, price, imageUrl, category, restaurant_id FROM dishes WHERE restaurant_id = %s", (restaurant['id'],)) 
             restaurant['menu'] = cursor.fetchall()
         cursor.close()
         conn.close()
@@ -184,6 +182,121 @@ def add_dish(current_user_id):
         return jsonify({"message": "Prato adicionado!", "id": new_id}), 201
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
+    
+# --- ROTAS DE RESTAURANTES FAVORITOS ---
+
+@app.route('/api/favorites/restaurants', methods=['GET'])
+@token_required
+def get_favorite_restaurants(current_user_id):
+    """Busca os IDs de todos os restaurantes favoritados pelo usuário logado."""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute("SELECT restaurant_id FROM favorite_restaurants WHERE user_id = %s", (current_user_id,))
+        # Extrai os IDs da tupla para uma lista simples, ex: [1, 5, 12]
+        favorite_ids = [item[0] for item in cursor.fetchall()]
+        cursor.close()
+        conn.close()
+        return jsonify(favorite_ids)
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+@app.route('/api/favorites/restaurants', methods=['POST'])
+@token_required
+def add_favorite_restaurant(current_user_id):
+    """Adiciona um restaurante à lista de favoritos do usuário."""
+    data = request.get_json()
+    restaurant_id = data.get('restaurantId')
+    if not restaurant_id:
+        return jsonify({"error": "restaurantId em falta"}), 400
+
+    sql = "INSERT INTO favorite_restaurants (user_id, restaurant_id) VALUES (%s, %s)"
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(sql, (current_user_id, restaurant_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Restaurante favoritado com sucesso!"}), 201
+    except mysql.connector.Error as err:
+        # Ignora o erro se o favorito já existir
+        if err.errno == 1062: # Duplicate entry
+            return jsonify({"message": "Restaurante já estava nos favoritos."}), 200
+        return jsonify({"error": str(err)}), 500
+
+@app.route('/api/favorites/restaurants/<int:restaurant_id>', methods=['DELETE'])
+@token_required
+def remove_favorite_restaurant(current_user_id, restaurant_id):
+    """Remove um restaurante da lista de favoritos do usuário."""
+    sql = "DELETE FROM favorite_restaurants WHERE user_id = %s AND restaurant_id = %s"
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(sql, (current_user_id, restaurant_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Restaurante removido dos favoritos."})
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+# --- ROTAS DE PRATOS FAVORITOS ---
+
+@app.route('/api/favorites/dishes', methods=['GET'])
+@token_required
+def get_favorite_dishes(current_user_id):
+    """Busca os IDs de todos os pratos favoritados pelo usuário logado."""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute("SELECT dish_id FROM favorite_dishes WHERE user_id = %s", (current_user_id,))
+        favorite_ids = [item[0] for item in cursor.fetchall()]
+        cursor.close()
+        conn.close()
+        return jsonify(favorite_ids)
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+@app.route('/api/favorites/dishes', methods=['POST'])
+@token_required
+def add_favorite_dish(current_user_id):
+    """Adiciona um prato à lista de favoritos do usuário."""
+    data = request.get_json()
+    dish_id = data.get('dishId')
+    if not dish_id:
+        return jsonify({"error": "dishId em falta"}), 400
+
+    sql = "INSERT INTO favorite_dishes (user_id, dish_id) VALUES (%s, %s)"
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(sql, (current_user_id, dish_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Prato favoritado com sucesso!"}), 201
+    except mysql.connector.Error as err:
+        if err.errno == 1062: # Duplicate entry
+            return jsonify({"message": "Prato já estava nos favoritos."}), 200
+        return jsonify({"error": str(err)}), 500
+
+@app.route('/api/favorites/dishes/<int:dish_id>', methods=['DELETE'])
+@token_required
+def remove_favorite_dish(current_user_id, dish_id):
+    """Remove um prato da lista de favoritos do usuário."""
+    sql = "DELETE FROM favorite_dishes WHERE user_id = %s AND dish_id = %s"
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(sql, (current_user_id, dish_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Prato removido dos favoritos."})
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
 
 # --- Executar a Aplicação ---
 if __name__ == '__main__':
