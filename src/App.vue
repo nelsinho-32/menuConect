@@ -190,8 +190,8 @@ const handleRegister = async (credentials) => {
 const handleLogin = async (credentials) => {
     try {
         await authStore.login(credentials);
+        userStore.setUserRole(authStore.currentUser.role);
         showToast(`Bem-vindo de volta, ${authStore.currentUser.name}!`);
-        // Após o login, busca os dados e vai para a home
         await restaurantStore.fetchRestaurantsFromAPI();
         goToView('home');
     } catch (errorMsg) {

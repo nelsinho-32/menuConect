@@ -21,7 +21,7 @@
 
         <div class="mt-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div v-if="userStore.isCompanyUser()" @click="$emit('openAddMenuItemModal', selectedCategory)"
+                <div v-if="canManageMenu" @click="$emit('openAddMenuItemModal', selectedCategory)"
                     class="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-500 hover:border-indigo-500 hover:text-indigo-600 cursor-pointer min-h-[140px]">
                     <div class="text-center">
                         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="mx-auto" viewBox="0 0 16 16">
@@ -55,14 +55,30 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useUserStore } from '@/stores/userStore';
+import { useRestaurantStore } from '@/stores/restaurantStore';
+import { useAuthStore } from '@/stores/authStore';
 
 const userStore = useUserStore();
+const authStore = useAuthStore();
+const restaurantStore = useRestaurantStore();
 
 const props = defineProps({
-    menu: { type: Array, required: true }
+    menu: { type: Array, required: true },
+    restaurantId: { type: Number, required: true }
 });
 
 defineEmits(['openActionModal', 'openAddMenuItemModal']);
+
+const canManageMenu = computed(() => {
+    if (!authStore.currentUser) return false;
+    // Admin pode sempre
+    if (authStore.currentUser.role === 'admin') return true;
+    // Empresa só pode se o ID do restaurante corresponder
+    if (authStore.currentUser.role === 'empresa') {
+        return authStore.currentUser.restaurant_id === props.restaurantId;
+    }
+    return false;
+});
 
 // Define as categorias fixas para garantir a ordem
 const categories = ref(['Entradas', 'Prato Principal', 'Sobremesas', 'Bebidas']);

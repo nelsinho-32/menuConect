@@ -2,7 +2,7 @@
     <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="flex flex-col md:flex-row justify-between md:items-center mb-8 gap-4">
             <h1 class="text-3xl font-bold">Nossos Restaurantes Parceiros</h1>
-            <button v-if="userStore.isCompanyUser()" @click="$emit('openAddRestaurantModal')" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 flex items-center gap-2 self-start md:self-center">
+            <button  v-if="authStore.currentUser && authStore.currentUser.role === 'admin'" @click="$emit('openAddRestaurantModal')" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 flex items-center gap-2 self-start md:self-center">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
                     <path d="M8.5 6a.5.5 0 0 0-1 0v1.5H6a.5.5 0 0 0 0 1h1.5V10a.5.5 0 0 0 1 0V8.5H10a.5.5 0 0 0 0-1H8.5V6z"/>
                     <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm10 0H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1z"/>
@@ -44,8 +44,10 @@
 import { ref, computed } from 'vue';
 import RestaurantCard from '../RestaurantCard.vue';
 import { useUserStore } from '@/stores/userStore';
+import { useAuthStore } from '@/stores/authStore';
 
 const userStore = useUserStore();
+const authStore = useAuthStore();
 
 const props = defineProps({
     restaurants: { type: Array, required: true },

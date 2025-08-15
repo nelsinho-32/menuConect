@@ -155,16 +155,6 @@
             </svg>
           </button>
 
-          <div class="flex items-center gap-2 rounded-full bg-gray-100 p-1 text-sm border">
-            <button @click="userStore.setUserRole('cliente')"
-              :class="[userStore.userRole === 'cliente' ? 'bg-indigo-600 text-white shadow' : 'text-gray-600', 'px-3 py-1 rounded-full font-semibold transition-all']">
-              Cliente
-            </button>
-            <button @click="userStore.setUserRole('empresa')"
-              :class="[userStore.userRole === 'empresa' ? 'bg-indigo-600 text-white shadow' : 'text-gray-600', 'px-3 py-1 rounded-full font-semibold transition-all']">
-              Empresa
-            </button>
-          </div>
         </div>
       </div>
     </div>
