@@ -40,7 +40,7 @@
                             <p class="text-sm text-gray-500 mt-1">{{ item.description }}</p>
                         </div>
                         <div class="mt-auto flex justify-between items-end">
-                             <p class="font-bold text-indigo-600 text-lg">R$ {{ item.price.toFixed(2).replace('.', ',') }}</p>
+                             <p class="font-bold text-indigo-600 text-lg">R$ {{ parseFloat(item.price).toFixed(2).replace('.', ',') }}</p>
                              <button @click="$emit('openActionModal', item)" class="bg-indigo-100 text-indigo-600 p-2 rounded-full hover:bg-indigo-200 flex-shrink-0">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                             </button>
@@ -69,6 +69,8 @@ const categories = ref(['Entradas', 'Prato Principal', 'Sobremesas', 'Bebidas'])
 const selectedCategory = ref(categories.value[0]);
 
 const filteredMenu = computed(() => {
+    // Adiciona uma verificação para garantir que o menu não é nulo/indefinido
+    if (!props.menu) return [];
     return props.menu.filter(item => item.category === selectedCategory.value);
 });
 </script>

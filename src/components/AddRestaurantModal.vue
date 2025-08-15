@@ -17,6 +17,13 @@
                         <input type="text" id="cuisine" v-model="newRestaurant.cuisine" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                     </div>
                 </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="city" class="block text-sm font-medium text-gray-700">Cidade (Ex: João Pessoa, PB)</label>
+                        <input type="text" id="city" v-model="newRestaurant.city" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
                     <div>
@@ -60,16 +67,16 @@
                          </div>
                         <input type="file" id="galleryUpload" @change="handleImageUpload($event, 'gallery')" accept="image/*" multiple class="hidden">
                     </div>
-                    <div>
-                        <label for="lat" class="block text-sm font-medium text-gray-700">Latitude</label>
-                        <input type="text" id="lat" v-model="newRestaurant.location.lat" required placeholder="-7.123456" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div>
+                            <label for="lat" class="block text-sm font-medium text-gray-700">Latitude</label>
+                            <input type="text" id="lat" v-model="newRestaurant.location.lat" placeholder="-7.123456" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label for="lng" class="block text-sm font-medium text-gray-700">Longitude</label>
+                            <input type="text" id="lng" v-model="newRestaurant.location.lng" placeholder="-34.123456" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        </div>
                     </div>
-                    <div>
-                        <label for="lng" class="block text-sm font-medium text-gray-700">Longitude</label>
-                        <input type="text" id="lng" v-model="newRestaurant.location.lng" required placeholder="-34.123456" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                    </div>
-                    <label for="city" class="block text-sm font-medium text-gray-700">Cidade (Ex: João Pessoa, PB)</label>
-                    <input type="text" id="city" v-model="newRestaurant.city" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                 </div>
 
                 <div class="p-6 bg-gray-50 rounded-b-2xl flex gap-3 -m-6 mt-6 pt-6">
@@ -91,7 +98,8 @@ const isDraggingMain = ref(false);
 const newRestaurant = reactive({
     name: '',
     cuisine: '',
-     location: { lat: '', lng: '' },
+    city: '', // Adicionado aqui para consistência
+    location: { lat: '', lng: '' },
     imageUrl: '',
     logoUrl: '',
     galleryUrls: [],

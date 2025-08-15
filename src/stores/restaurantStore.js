@@ -1,8 +1,10 @@
+// src/stores/restaurantStore.js (VERSÃO ATUALIZADA)
+
 import { reactive, computed } from 'vue'
 import { defineStore } from 'pinia'
 
 export const useRestaurantStore = defineStore('restaurants', () => {
-  
+
   const restaurants = reactive([])
 
   const allDishes = computed(() => {
@@ -24,95 +26,127 @@ export const useRestaurantStore = defineStore('restaurants', () => {
     return items;
   });
 
-  // AQUI ESTÁ A CORREÇÃO: Adicionada a propriedade "city" e "location"
-  const getInitialRestaurants = () => [
-      {
-        id: 1, name: "Terraço Lisboa Bistrô e Café", cuisine: "Bistrô & Café", 
-        city: "João Pessoa, PB",
-        location: { lat: -7.0924, lng: -34.8436 }, 
-        imageUrl: '/src/assets/images/TerracoLisboa.webp', logoUrl: '/src/assets/images/LogoLisboa.png', galleryUrls: ['/src/assets/images/VistaPrincipalLisboa.jpg', '/src/assets/images/TerracoLisboaNoite.jpg'], menu: [], isNew: false,
-        mapElements: [ { id: 'bar-1', label: 'Bar', x: 10, y: 10, width: 150, height: 40, fill: '#a8a29e', textColor: '#FFFFFF', rx: 5, rotation: 0, icon_svg: '<path d="M12.5 1a1 1 0 0 1 1 1v5.333a2.5 2.5 0 0 1-5 0V2a1 1 0 0 1 1-1h3zm-.5 4.333V2H9.5v3.333a1.5 1.5 0 0 0 3 0z"/><path d="M13 12.5a1 1 0 0 1 1-1h.5a1 1 0 0 1 0 2h-.5a1 1 0 0 1-1-1zm-10 0a1 1 0 0 1 1-1h.5a1 1 0 0 1 0 2H4a1 1 0 0 1-1-1zM5 6a1 1 0 0 1 1-1h5a1 1 0 0 1 0 2H6a1 1 0 0 1-1-1z"/>' } ],
-        tables: [ { id: 1, x: 50, y: 80, width: 40, height: 40, shape: 'round', status: 'available', images: [] } ],
-        floorPatternId: 'floor-marble'
-      },
-      {
-        id: 2, name: "Bruttão Burger Bananeiras", cuisine: "Hamburgueria", 
-        city: "Bananeiras, PB",
-        location: { lat: -6.7533, lng: -35.6333 },
-        imageUrl: '/src/assets/images/BruttaoBurguerBeco.jpg', logoUrl: '/src/assets/images/BruttaoLogo.png', galleryUrls: ['/src/assets/images/BruttaoLocal.jpg'], menu: [], isNew: false, mapElements: [], tables: [], floorPatternId: 'floor-darkwood'
-      },
-      {
-        id: 3, name: "Açaiteria", cuisine: "Açaí & Lanches", 
-        city: "João Pessoa, PB",
-        location: { lat: -7.1153, lng: -34.8610 },
-        imageUrl: '/src/assets/images/Acaiteria.jpg', logoUrl: '/src/assets/images/Acaiteria.jpg', galleryUrls: [], menu: [], isNew: false, mapElements: [], tables: [], floorPatternId: 'floor-tiles'
+  // ---- ALTERAÇÃO PRINCIPAL AQUI ----
+  // A função agora é 'async' para poder esperar pela resposta da API.
+  async function fetchRestaurantsFromAPI() {
+    try {
+      // Faz o pedido GET para a nossa API Flask que está a correr na porta 5000.
+      const response = await fetch('http://localhost:5000/api/restaurants');
+      if (!response.ok) {
+        throw new Error('A resposta da rede não foi bem-sucedida.');
       }
-  ];
-  
-  function saveRestaurantsToLocalStorage() {
-    localStorage.setItem('menuConnectRestaurants', JSON.stringify(restaurants));
-  };
+      const data = await response.json();
 
-  function loadRestaurantsFromLocalStorage() {
-    restaurants.length = 0;
-    const savedRestaurants = localStorage.getItem('menuConnectRestaurants');
-    if (savedRestaurants) {
-        restaurants.push(...JSON.parse(savedRestaurants));
-    } else {
-        restaurants.push(...getInitialRestaurants());
+      // Limpa a lista atual e preenche com os dados vindos da API.
+      restaurants.length = 0;
+      restaurants.push(...data);
+
+      // Simula menus e outros dados que ainda não estão no back-end
+      // (vamos adicionar isto ao back-end mais tarde!)
+      restaurants.forEach(r => {
+          if (!r.menu) r.menu = [];
+          if (!r.mapElements) r.mapElements = [];
+          if (!r.tables) r.tables = [];
+          if (!r.floorPatternId) r.floorPatternId = 'floor-marble';
+      });
+
+    } catch (error) {
+      console.error("Falha ao buscar restaurantes da API:", error);
+      // Opcional: Carregar dados de fallback se a API falhar
     }
-    restaurants.forEach(r => {
-        if (!r.menu) r.menu = [];
-        if (!r.mapElements) r.mapElements = [];
-        if (!r.tables) r.tables = [];
-        if (!r.floorPatternId) r.floorPatternId = 'floor-marble';
-    });
   };
+  // ------------------------------------
 
-  function addRestaurant(newRestaurantData) {
-    const newId = (restaurants.length > 0 ? Math.max(...restaurants.map(r => r.id)) : 0) + 1;
+  // Funções para adicionar e atualizar continuarão a funcionar,
+  // mas por agora só atualizam o estado no frontend.
+  // Nos próximos passos, faremos com que elas também chamem a API.
+
+  // ---- NOVA VERSÃO DA FUNÇÃO addRestaurant ----
+async function addRestaurant(newRestaurantData) {
+  try {
+    // Envia os dados do novo restaurante para a API via método POST
+    const response = await fetch('http://localhost:5000/api/restaurants', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(newRestaurantData),
+    });
+
+    if (!response.ok) {
+      throw new Error('Falha ao adicionar o restaurante.');
+    }
+
+    const result = await response.json();
+
+    // Cria o objeto completo do restaurante com o ID retornado pela API
     const restaurantToAdd = {
-        id: newId,
-        ...newRestaurantData,
-        menu: [],
-        isNew: true,
-        mapElements: [ { id: 'bar-1', label: 'Bar', x: 10, y: 10, width: 150, height: 40, fill: '#a8a29e', textColor: '#FFFFFF', rx: 5, rotation: 0, icon_svg: '...' } ],
-        tables: [],
-        floorPatternId: 'floor-marble'
+      ...newRestaurantData,
+      id: result.id, // Usa o ID que o back-end nos deu!
+      menu: [],
+      isNew: true,
+      mapElements: [ { id: 'bar-1', label: 'Bar', x: 10, y: 10, width: 150, height: 40, fill: '#a8a29e', textColor: '#FFFFFF', rx: 5, rotation: 0, icon_svg: '...' } ],
+      tables: [],
+      floorPatternId: 'floor-marble'
     };
+
+    // Adiciona o novo restaurante à lista no frontend para atualização imediata da UI
     restaurants.push(restaurantToAdd);
-    saveRestaurantsToLocalStorage();
     return restaurantToAdd;
-  }
 
-  function addDish(newDishData) {
-      const parentRestaurant = restaurants.find(r => r.name === newDishData.restaurantName);
-      if (!parentRestaurant) return null;
-
-      const newDishId = (allDishes.value.length > 0 ? Math.max(...allDishes.value.map(d => parseInt(d.id) || 0)) : 0) + 1;
-      const dishToAdd = {
-          id: newDishId,
-          name: newDishData.dishName,
-          dishName: newDishData.dishName,
-          restaurantName: parentRestaurant.name,
-          restaurantId: parentRestaurant.id,
-          price: parseFloat(newDishData.price),
-          imageUrl: newDishData.imageUrl,
-          category: newDishData.category,
-          description: newDishData.description || 'Um novo prato delicioso.'
-      };
-      parentRestaurant.menu.push(dishToAdd);
-      saveRestaurantsToLocalStorage();
-      return dishToAdd;
+  } catch (error) {
+    console.error("Erro ao adicionar restaurante via API:", error);
+    return null; // Retorna null para indicar que houve um erro
   }
-  
+}
+
+  async function addDish(newDishData) {
+  try {
+    const response = await fetch('http://localhost:5000/api/dishes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(newDishData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Falha ao adicionar o prato.');
+    }
+
+    const result = await response.json();
+
+    // Encontra o restaurante no estado local para adicionar o prato
+    const parentRestaurant = restaurants.find(r => r.name === newDishData.restaurantName);
+    if (parentRestaurant) {
+        const dishToAdd = {
+          ...newDishData,
+          id: result.id,
+          name: newDishData.dishName, // Garante que a propriedade 'name' existe
+          price: parseFloat(newDishData.price) // Garante que o preço é um número
+        };
+        if (!parentRestaurant.menu) {
+            parentRestaurant.menu = [];
+        }
+        parentRestaurant.menu.push(dishToAdd);
+        return dishToAdd;
+    }
+    return null;
+
+  } catch (error) {
+    console.error("Erro ao adicionar prato via API:", error);
+    return null;
+  }
+}
+
   function updateRestaurantMap(restaurantId, updatedLayout) {
       const restaurantIndex = restaurants.findIndex(r => r.id === restaurantId);
       if (restaurantIndex !== -1) {
           restaurants[restaurantIndex].mapElements = updatedLayout.mapElements;
           restaurants[restaurantIndex].tables = updatedLayout.tables;
           restaurants[restaurantIndex].floorPatternId = updatedLayout.floorPatternId;
-          saveRestaurantsToLocalStorage();
+          // saveRestaurantsToLocalStorage();
       }
   }
 
@@ -122,17 +156,17 @@ export const useRestaurantStore = defineStore('restaurants', () => {
         const table = restaurant.tables.find(t => t.id === tableId);
         if (table) {
             table.status = newStatus;
-            saveRestaurantsToLocalStorage();
+            // saveRestaurantsToLocalStorage();
         }
     }
   }
 
-  return { 
-    restaurants, 
-    allDishes, 
+  return {
+    restaurants,
+    allDishes,
     featuredRestaurants,
     searchableItems,
-    loadRestaurantsFromLocalStorage, 
+    fetchRestaurantsFromAPI, // Expondo a nova função
     addRestaurant,
     addDish,
     updateRestaurantMap,

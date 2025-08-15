@@ -10,7 +10,7 @@
                 <div class="space-y-2 text-gray-600 mb-6 max-h-40 overflow-y-auto pr-2">
                     <div v-for="item in cart" :key="item.id" class="flex justify-between text-sm">
                         <span>{{ item.quantity }}x {{ item.dishName }}</span>
-                        <span>R$ {{ (item.price * item.quantity).toFixed(2).replace('.',',') }}</span>
+                        <span>R$ {{ (parseFloat(item.price) * item.quantity).toFixed(2).replace('.',',') }}</span>
                     </div>
                 </div>
                 <div class="space-y-1 text-sm border-t pt-2 mt-2">
@@ -61,10 +61,10 @@ defineEmits(['closeModal', 'paymentSuccess']);
 const selectedPayment = ref('pix');
 
 const subtotal = computed(() => {
-    return props.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    // E A CORREÇÃO ESTÁ AQUI TAMBÉM
+    return props.cart.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
 });
 
-// AQUI ESTÁ A LÓGICA ATUALIZADA
 const deliveryFee = computed(() => {
     const deliveryRestaurants = new Set();
     props.cart.forEach(item => {

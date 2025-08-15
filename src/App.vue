@@ -19,6 +19,8 @@ import TableManagementView from './components/views/TableManagementView.vue';
 import ReservationSharedView from './components/views/ReservationSharedView.vue';
 import RouteView from './components/views/RouteView.vue';
 import DashboardView from './components/views/DashboardView.vue';
+import LoginView from './components/views/LoginView.vue'; 
+import RegisterView from './components/views/RegisterView.vue';
 
 // Modais
 import ActionModal from './components/ActionModal.vue';
@@ -39,14 +41,16 @@ import { useRestaurantStore } from './stores/restaurantStore';
 import { useEncontroStore } from './stores/encontroStore';
 import { useUserStore } from './stores/userStore';
 import { useChatStore } from './stores/chatStore';
+import { useAuthStore } from './stores/authStore';
 
 // 2. Ativação das stores para usar no componente
 const restaurantStore = useRestaurantStore();
 const encontroStore = useEncontroStore();
 const chatStore = useChatStore();
 const userStore = useUserStore();
+const authStore = useAuthStore();
 
-// --- DADOS REATIVOS QUE PERMANECEM NO APP.VUE ---
+// --- ESTADO REATIVO (EXISTENTE) ---
 const cart = reactive([]);
 const favoriteDishes = reactive(new Set());
 const favoriteRestaurants = reactive(new Set());
@@ -69,48 +73,42 @@ const isTableDetailModalOpen = ref(false);
 const currentTableForDetail = ref(null);
 const isNotificationsOpen = ref(false);
 const isFriendsChatOpen = ref(false);
-const isMenuModalOpen = ref(false); // 2. Adicionar novo estado
+const isMenuModalOpen = ref(false);
 const currentRestaurantForMenu = ref(null);
-
-
-const viewState = reactive({
-    name: 'home',
-    data: null
-});
-const previousViewState = ref('home');
-
-const userReservations = reactive({
-    bookedTable: null,
-    waitingForTable: null,
-});
-
-const userProfile = reactive({
-    id: 789,
-    name: 'Nelsinho',
-    email: 'nelsinho@email.com',
-    phone: '+83 99692-1055',
-    avatarUrl: 'https://placehold.co/256x256/6366f1/ffffff?text=N',
-    preferences: ['Italiana', 'Hamburgueria', 'Japonesa']
-});
-
-const allUsers = reactive([
-    { id: 123, name: 'Maria Silva', avatarUrl: 'https://placehold.co/256x256/f87171/ffffff?text=M' },
-    { id: 456, name: 'João Santos', avatarUrl: 'https://placehold.co/256x256/60a5fa/ffffff?text=J' },
-]);
-
-const notifications = reactive([
-    { id: 1, icon: '📅', message: 'Sua reserva no Terraço Lisboa foi confirmada!', time: 'há 5 minutos', bgColor: 'bg-blue-100' },
-    { id: 2, icon: '✅', message: 'Seu pedido no Bruttão Burger foi entregue.', time: 'há 1 hora', bgColor: 'bg-green-100' },
-    { id: 3, icon: '💬', message: 'Maria Silva enviou uma nova mensagem.', time: 'há 3 horas', bgColor: 'bg-indigo-100' }
-]);
-
-const friends = reactive([
-    { id: 1, name: 'Maria Silva', avatarUrl: 'https://placehold.co/100x100/f87171/ffffff?text=M', online: true, status: 'Online' },
-    { id: 2, name: 'João Santos', avatarUrl: 'https://placehold.co/100x100/60a5fa/ffffff?text=J', online: false, status: 'Offline há 2 horas' }
-]);
-
 const isConfirmationModalOpen = ref(false);
 const confirmationModalMessage = ref('');
+const userReservations = reactive({ bookedTable: null, waitingForTable: null });
+// Dados mockados que serão substituídos por dados reais da API
+const allUsers = reactive([]); 
+const notifications = reactive([]);
+const friends = reactive([]);
+
+
+// O estado inicial da vista agora é 'login' se o usuário não estiver autenticado
+const viewState = reactive({
+    name: authStore.isAuthenticated ? 'home' : 'login',
+    data: null
+});
+
+const previousViewState = ref('home');
+
+
+// --- DADOS DO USUÁRIO ---
+// O perfil do usuário agora vem da authStore
+const userProfile = computed(() => authStore.currentUser || {
+    name: 'Visitante',
+    email: '',
+    avatarUrl: 'https://placehold.co/256x256/cccccc/ffffff?text=?'
+});
+
+
+onMounted(() => {
+    // Se o usuário estiver logado, busca os dados da aplicação
+    if (authStore.isAuthenticated) {
+        restaurantStore.fetchRestaurantsFromAPI();
+        // ... (carregar outros dados como favoritos, histórico, etc., que também virão da API no futuro)
+    }
+}); 
 
 // --- DADOS COMPUTADOS ---
 // Estes computados agora usam os dados diretamente do armazém de restaurantes
@@ -164,26 +162,55 @@ const loadUserProfileFromLocalStorage = () => {
 
 // Quando a aplicação é montada, carrega tudo a partir das fontes corretas.
 onMounted(() => {
-    restaurantStore.loadRestaurantsFromLocalStorage();
+    restaurantStore.fetchRestaurantsFromAPI();
     loadFavoritesFromLocalStorage();
     loadOrderHistoryFromLocalStorage();
     loadUserProfileFromLocalStorage();
 });
 
 // --- MÉTODOS ---
-const showToast = (message) => {
+const showToast = (message, type = 'success') => {
     toastMessage.value = message;
     isToastVisible.value = true;
-    setTimeout(() => isToastVisible.value = false, 2500);
+    // Adicionar classe de cor baseada no tipo (opcional, requer CSS)
+    setTimeout(() => isToastVisible.value = false, 3000);
 };
 
 const goToView = (name, data = null) => {
-    if (['home', 'restaurants', 'dishes'].includes(viewState.name)) {
+    if (['home', 'restaurants', 'dishes', 'login', 'register'].includes(viewState.name)) {
         previousViewState.value = viewState.name;
     }
     viewState.name = name;
     viewState.data = data;
     window.scrollTo(0, 0);
+};
+
+const handleRegister = async (credentials) => {
+    try {
+        await authStore.register(credentials);
+        showToast('Registo bem-sucedido! Por favor, faça login.');
+        goToView('login');
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
+    }
+};
+
+const handleLogin = async (credentials) => {
+    try {
+        await authStore.login(credentials);
+        showToast(`Bem-vindo de volta, ${authStore.currentUser.name}!`);
+        // Após o login, busca os dados e vai para a home
+        await restaurantStore.fetchRestaurantsFromAPI();
+        goToView('home');
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
+    }
+};
+
+const handleLogout = () => {
+    authStore.logout();
+    showToast('Sessão terminada.');
+    goToView('login');
 };
 
 const handleViewRoute = (restaurant) => {
@@ -192,18 +219,22 @@ const handleViewRoute = (restaurant) => {
 
 const goBack = () => goToView(previousViewState.value || 'home');
 
-const handleAddRestaurant = (newRestaurantData) => {
-    const added = restaurantStore.addRestaurant(newRestaurantData);
-    showToast(`Restaurante '${added.name}' adicionado com sucesso!`);
-    closeAddRestaurantModal();
+const handleAddRestaurant = async (newRestaurantData) => {
+    const added = await restaurantStore.addRestaurant(newRestaurantData);
+    if (added) { // Verifica se o restaurante foi adicionado com sucesso
+      showToast(`Restaurante '${added.name}' adicionado com sucesso!`);
+      closeAddRestaurantModal();
+    } else {
+      showToast('Erro ao adicionar restaurante. Tente novamente.', 'error');
+    }
 };
 
-const handleAddDish = (newDishData) => {
-    const added = restaurantStore.addDish(newDishData);
+const handleAddDish = async (newDishData) => {
+    const added = await restaurantStore.addDish(newDishData);
     if (added) {
         showToast(`Prato '${added.dishName}' adicionado com sucesso!`);
     } else {
-        showToast(`Erro: Restaurante não encontrado.`, 'error');
+        showToast(`Erro ao adicionar prato. Verifique os dados e tente novamente.`, 'error');
     }
     closeAddDishModal();
 };
@@ -476,7 +507,18 @@ const handleGoToReservation = (dish) => {
 
 const sendWhatsAppConfirmation = (reservationDetails) => {
     const { restaurant, table, dateTime, guests } = reservationDetails;
-    let phone = userProfile.phone.replace(/\D/g, '');
+    
+    // ---- A CORREÇÃO ESTÁ AQUI ----
+    // 1. Verifica se o perfil do usuário e o telefone existem.
+    if (!userProfile.value || !userProfile.value.phone) {
+        showToast("Não foi possível enviar a confirmação: número de telefone não encontrado no perfil.", "error");
+        console.error("Tentativa de enviar WhatsApp sem número de telefone.");
+        return; // Interrompe a função aqui.
+    }
+    // 2. Se o telefone existir, o resto do código executa com segurança.
+    let phone = userProfile.value.phone.replace(/\D/g, '');
+    // ----------------------------
+
     if (phone.length <= 11) phone = '55' + phone;
     const formattedDate = dateTime.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const formattedTime = dateTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -546,10 +588,13 @@ const handleConfirmReservation = (reservation) => {
         showToast(`Reserva para a mesa ${reservation.tableId} confirmada!`);
     }
 };
-const handleUpdateUser = (updatedData) => {
-    Object.assign(userProfile, updatedData);
-    saveUserProfileToLocalStorage();
-    showToast('Perfil atualizado com sucesso!');
+const handleUpdateUser = async (updatedData) => {
+    try {
+        await authStore.updateProfile(updatedData);
+        showToast('Perfil atualizado com sucesso!');
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
+    }
 };
 const handleSearchNavigation = (item) => {
     if (item.type === 'restaurant') {
@@ -588,100 +633,64 @@ const closeCustomizeModal = () => {
 
 <template>
     <div>
-        <app-header :cart-item-count="cartItemCount" :user="userProfile"
-            :searchable-items="restaurantStore.searchableItems" :active-view="viewState.name"
-            :is-notifications-open="isNotificationsOpen" :is-friends-chat-open="isFriendsChatOpen"
-            :notifications="notifications" :friends="friends" @navigate="goToView"
-            @search-navigate="handleSearchNavigation" @toggle-notifications="toggleNotifications"
-            @toggle-friends-chat="toggleFriendsChat" />
-        <HomeView v-if="viewState.name === 'home'" :restaurants="restaurantStore.featuredRestaurants"
-            :new-restaurants="newlyAddedRestaurants" :trending-dishes="trendingDishes" :frequent-dishes="frequentDishes"
-            :favorite-dishes="favoriteDishes" :favorite-restaurants="favoriteRestaurants"
-            :all-dishes="restaurantStore.allDishes" @open-action-modal="openActionModal"
-            @open-dine-options="openDineOptionsModal" @toggle-dish-favorite="toggleDishFavorite"
-            @toggle-restaurant-favorite="toggleRestaurantFavorite"
-            @request-reservation="restaurant => goToView('reservation', restaurant)"
-            @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)" @open-payment-modal="openCheckout"
-            @open-menu-modal="openMenuModal" />
-        <RestaurantsView v-if="viewState.name === 'restaurants'" :restaurants="restaurantStore.restaurants"
-            :favorite-restaurants="favoriteRestaurants" @toggle-favorite="toggleRestaurantFavorite"
-            @request-reservation="restaurant => goToView('reservation', restaurant)"
-            @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)"
-            @open-add-restaurant-modal="openAddRestaurantModal" @open-menu-modal="openMenuModal" />
-        <DishesView v-if="viewState.name === 'dishes'" :dishes="restaurantStore.allDishes"
-            :favorite-dishes="favoriteDishes" @open-action-modal="openActionModal"
-            @open-dine-options="openDineOptionsModal" @toggle-favorite="toggleDishFavorite"
-            @open-add-dish-modal="openAddDishModal" />
-        <RestaurantDetailView v-if="viewState.name === 'restaurantDetail'" :restaurant="viewState.data"
-            :user-profile="userProfile" :all-users="allUsers" @back-to-main="goBack"
-            @open-action-modal="openActionModal" @open-add-dish-modal="openAddDishModal"
-            @confirm-encontro="handleConfirmEncontro" @open-menu-item-select-modal="openSelectMenuItemModal"
-            @open-customize-modal="openCustomizeModal" @view-route="handleViewRoute" />
-        <RouteView v-if="viewState.name === 'route'" :restaurant="viewState.data" @back="goBack" />
-        <ReservationView v-if="viewState.name === 'reservation'" :restaurant="viewState.data"
-            :user-reservations="userReservations" @back-to-main="goBack" @update-map="handleUpdateMap"
-            @book-table="handleBooking" @join-waitlist="handleWaitingList"
-            @cancel-reservation="handleCancellation('booked')" />
-        <MyReservationsView v-if="viewState.name === 'myReservations'" :reservations="userReservations"
-            @cancel-reservation="handleCancellation" @confirm-reservation="handleConfirmReservation"
-            @back-to-main="goBack" />
-        <UserProfileView v-if="viewState.name === 'userProfile'" :user="userProfile" @update-user="handleUpdateUser"
-            @back-to-main="goBack" />
-        <CartView v-if="viewState.name === 'cart'" :cart-items="cart" :all-dishes="restaurantStore.allDishes"
-            @update-quantity="updateQuantity" @remove-from-cart="removeFromCart" @add-to-cart="addToCart"
-            @back-to-main="goBack" @checkout="openCheckout" @edit-item="openCustomizeModal"
-            @update-dine-option="handleUpdateDineOption" />
-        <FavoriteRestaurantsView v-if="viewState.name === 'favoriteRestaurants'"
-            :favorite-restaurants="favoritedRestaurantsList" @toggle-favorite="toggleRestaurantFavorite"
-            @request-reservation="restaurant => goToView('reservation', restaurant)"
-            @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)" @back-to-main="goToView('home')"
-            @open-menu-modal="openMenuModal" />
-        <FavoriteDishesView v-if="viewState.name === 'favoriteDishes'" :favorite-dishes="favoritedDishesList"
-            @toggle-favorite="toggleDishFavorite" @open-action-modal="openActionModal"
-            @open-dine-options="openDineOptionsModal" @back-to-main="goToView('home')" />
-        <OrderHistoryView v-if="viewState.name === 'orderHistory'" :order-history="orderHistory"
-            @back-to-main="goToView('home')" />
-        <TableManagementView v-if="viewState.name === 'tableManagement'" :order-history="orderHistory"
-            @open-table-detail-modal="openTableDetailModal" />
-        <TableDetailModal v-if="isTableDetailModalOpen" :table="currentTableForDetail" :reservations="userReservations"
-            :order-history="orderHistory" :user-profile="userProfile" @close="isTableDetailModalOpen = false"
-            @update-status="handleUpdateTableStatus" />
-        <DashboardView v-if="viewState.name === 'dashboard'" :reservations="userReservations"
-            :order-history="orderHistory" @navigate-to="goToView" />
+        <template v-if="!authStore.isAuthenticated">
+            <LoginView v-if="viewState.name === 'login'" @login="handleLogin" @navigate-to="goToView" />
+            <RegisterView v-if="viewState.name === 'register'" @register="handleRegister" @navigate-to="goToView" />
+        </template>
 
-        <Footer />
+        <template v-else>
+            <app-header 
+                :cart-item-count="cartItemCount" 
+                :user="userProfile"
+                :searchable-items="restaurantStore.searchableItems" 
+                :active-view="viewState.name"
+                :is-notifications-open="isNotificationsOpen" 
+                :is-friends-chat-open="isFriendsChatOpen"
+                :notifications="notifications" 
+                :friends="friends" 
+                @navigate="goToView"
+                @logout="handleLogout"
+                @search-navigate="handleSearchNavigation" 
+                @toggle-notifications="isNotificationsOpen = !isNotificationsOpen"
+                @toggle-friends-chat="isFriendsChatOpen = !isFriendsChatOpen" 
+            />
+            
+            <main>
+                <HomeView v-if="viewState.name === 'home'" :restaurants="restaurantStore.featuredRestaurants" :new-restaurants="newlyAddedRestaurants" :trending-dishes="trendingDishes" :frequent-dishes="frequentDishes" :favorite-dishes="favoriteDishes" :favorite-restaurants="favoriteRestaurants" :all-dishes="restaurantStore.allDishes" @open-action-modal="openActionModal" @open-dine-options="openDineOptionsModal" @toggle-dish-favorite="toggleDishFavorite" @toggle-restaurant-favorite="toggleRestaurantFavorite" @request-reservation="restaurant => goToView('reservation', restaurant)" @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)" @open-payment-modal="openCheckout" @open-menu-modal="openMenuModal" />
+                <RestaurantsView v-if="viewState.name === 'restaurants'" :restaurants="restaurantStore.restaurants" :favorite-restaurants="favoriteRestaurants" @toggle-favorite="toggleRestaurantFavorite" @request-reservation="restaurant => goToView('reservation', restaurant)" @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)" @open-add-restaurant-modal="openAddRestaurantModal" @open-menu-modal="openMenuModal" />
+                <DishesView v-if="viewState.name === 'dishes'" :dishes="restaurantStore.allDishes" :favorite-dishes="favoriteDishes" @open-action-modal="openActionModal" @open-dine-options="openDineOptionsModal" @toggle-favorite="toggleDishFavorite" @open-add-dish-modal="openAddDishModal" />
+                <RestaurantDetailView v-if="viewState.name === 'restaurantDetail'" :restaurant="viewState.data" :user-profile="userProfile" :all-users="allUsers" @back-to-main="goBack" @open-action-modal="openActionModal" @open-add-dish-modal="openAddDishModal" @confirm-encontro="handleConfirmEncontro" @open-menu-item-select-modal="openSelectMenuItemModal" @open-customize-modal="openCustomizeModal" @view-route="handleViewRoute" />
+                <RouteView v-if="viewState.name === 'route'" :restaurant="viewState.data" @back="goBack" />
+                <ReservationView v-if="viewState.name === 'reservation'" :restaurant="viewState.data" :user-reservations="userReservations" @back-to-main="goBack" @update-map="handleUpdateMap" @book-table="handleBooking" @join-waitlist="handleWaitingList" @cancel-reservation="handleCancellation('booked')" />
+                <MyReservationsView v-if="viewState.name === 'myReservations'" :reservations="userReservations" @cancel-reservation="handleCancellation" @confirm-reservation="handleConfirmReservation" @back-to-main="goBack" />
+                <UserProfileView v-if="viewState.name === 'userProfile'" :user="userProfile" @update-user="handleUpdateUser" @back-to-main="goBack" />
+                <CartView v-if="viewState.name === 'cart'" :cart-items="cart" :all-dishes="restaurantStore.allDishes" @update-quantity="updateQuantity" @remove-from-cart="removeFromCart" @add-to-cart="addToCart" @back-to-main="goBack" @checkout="openCheckout" @edit-item="openCustomizeModal" @update-dine-option="handleUpdateDineOption" />
+                <FavoriteRestaurantsView v-if="viewState.name === 'favoriteRestaurants'" :favorite-restaurants="favoritedRestaurantsList" @toggle-favorite="toggleRestaurantFavorite" @request-reservation="restaurant => goToView('reservation', restaurant)" @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)" @back-to-main="goToView('home')" @open-menu-modal="openMenuModal" />
+                <FavoriteDishesView v-if="viewState.name === 'favoriteDishes'" :favorite-dishes="favoritedDishesList" @toggle-favorite="toggleDishFavorite" @open-action-modal="openActionModal" @open-dine-options="openDineOptionsModal" @back-to-main="goToView('home')" />
+                <OrderHistoryView v-if="viewState.name === 'orderHistory'" :order-history="orderHistory" @back-to-main="goToView('home')" />
+                <TableManagementView v-if="viewState.name === 'tableManagement'" :order-history="orderHistory" @open-table-detail-modal="openTableDetailModal" />
+                <DashboardView v-if="viewState.name === 'dashboard'" :reservations="userReservations" :order-history="orderHistory" @navigate-to="goToView" />
+                <ReservationSharedView v-if="viewState.name === 'sharedReservation'" :encounter="viewState.data.encounter" :current-user="viewState.data.currentUser" :restaurant="viewState.data.restaurant" @back-to-main="goToView('home')" @open-menu-item-select-modal="openSelectMenuItemModal" />
+            </main>
 
-        <AddRestaurantModal v-if="isAddRestaurantModalOpen" @close="closeAddRestaurantModal"
-            @add-restaurant="handleAddRestaurant" />
-        <AddDishModal v-if="isAddDishModalOpen" :allRestaurants="restaurantStore.restaurants"
-            :restaurant="dishModalProps.restaurant" :category="dishModalProps.category" @close="closeAddDishModal"
-            @add-dish="handleAddDish" />
-        <ActionModal v-if="isActionModalOpen" :dish="currentDishForAction" @close-modal="closeActionModal"
-            @add-to-cart="addToCart" @order-now="orderNowFromAction" @open-customize-modal="openCustomizeModal" />
-        <CustomizeDishModal v-if="isCustomizeModalOpen" :dish="currentDishForAction" @close="closeCustomizeModal"
-            @add-to-cart="addToCart" />
-        <DineOptionsModal v-if="isDineOptionsModalOpen" :dish="currentDishForAction"
-            @close-modal="closeDineOptionsModal" @dine-in="handleDineInOrTakeout" @takeout="handleDineInOrTakeout"
-            @reserve="handleGoToReservation" />
-        <PaymentModal v-if="isPaymentModalOpen" :cart="cart" :shortcut="paymentShortcut"
-            @close-modal="closePaymentModal" @payment-success="handlePaymentSuccess" />
-        <PixModal v-if="isPixModalOpen" :cart="cart" @close="closePixModal" @payment-success="handlePaymentSuccess" />
-        <ConfirmationModal v-if="isConfirmationModalOpen" :message="confirmationModalMessage"
-            @close="isConfirmationModalOpen = false" />
-        <SelectMenuItemModal v-if="isSelectMenuItemModalOpen" :menu-items="menuItemModalProps.menuItems"
-            :category="menuItemModalProps.category" @close="isSelectMenuItemModalOpen = false"
-            @item-selected="handleMenuItemSelection" />
-        <CustomizeDishModal v-if="isCustomizeModalOpen" :dish="currentDishForAction" @close="closeCustomizeModal"
-            @add-to-cart="handleUpdateCartItem" />
-        <ChatModal />
-        <ReservationSharedView v-if="viewState.name === 'sharedReservation'" :encounter="viewState.data.encounter"
-            :current-user="viewState.data.currentUser" :restaurant="viewState.data.restaurant"
-            @back-to-main="goToView('home')" @open-menu-item-select-modal="openSelectMenuItemModal" />
-        <MenuModal v-if="isMenuModalOpen" :restaurant="currentRestaurantForMenu" @close="closeMenuModal"
-            @open-action-modal="openActionModal" />
-        <div
-            :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
-            {{ toastMessage }}
-        </div>
+            <Footer />
+
+            <AddRestaurantModal v-if="isAddRestaurantModalOpen" @close="closeAddRestaurantModal" @add-restaurant="handleAddRestaurant" />
+            <AddDishModal v-if="isAddDishModalOpen" :allRestaurants="restaurantStore.restaurants" :restaurant="dishModalProps.restaurant" :category="dishModalProps.category" @close="closeAddDishModal" @add-dish="handleAddDish" />
+            <ActionModal v-if="isActionModalOpen" :dish="currentDishForAction" @close-modal="closeActionModal" @add-to-cart="addToCart" @order-now="orderNowFromAction" @open-customize-modal="openCustomizeModal" />
+            <CustomizeDishModal v-if="isCustomizeModalOpen" :dish="currentDishForAction" @close="closeCustomizeModal" @add-to-cart="handleUpdateCartItem" />
+            <DineOptionsModal v-if="isDineOptionsModalOpen" :dish="currentDishForAction" @close-modal="closeDineOptionsModal" @dine-in="handleDineInOrTakeout" @takeout="handleDineInOrTakeout" @reserve="handleGoToReservation" />
+            <PaymentModal v-if="isPaymentModalOpen" :cart="cart" :shortcut="paymentShortcut" @close-modal="closePaymentModal" @payment-success="handlePaymentSuccess" />
+            <PixModal v-if="isPixModalOpen" :cart="cart" @close="closePixModal" @payment-success="handlePaymentSuccess" />
+            <ConfirmationModal v-if="isConfirmationModalOpen" :message="confirmationModalMessage" @close="isConfirmationModalOpen = false" />
+            <SelectMenuItemModal v-if="isSelectMenuItemModalOpen" :menu-items="menuItemModalProps.menuItems" :category="menuItemModalProps.category" @close="isSelectMenuItemModalOpen = false" @item-selected="handleMenuItemSelection" />
+            <TableDetailModal v-if="isTableDetailModalOpen" :table="currentTableForDetail" :reservations="userReservations" :order-history="orderHistory" :user-profile="userProfile" @close="isTableDetailModalOpen = false" @update-status="handleUpdateTableStatus" />
+            <ChatModal />
+            <MenuModal v-if="isMenuModalOpen" :restaurant="currentRestaurantForMenu" @close="closeMenuModal" @open-action-modal="openActionModal" />
+            
+            <div :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
+                {{ toastMessage }}
+            </div>
+        </template>
     </div>
 </template>
