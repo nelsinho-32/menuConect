@@ -12,8 +12,30 @@ export const useManagementStore = defineStore('management', () => {
     waitlist: [],
     isLoading: false,
     financials: { dailySales: 0, mostPopularDish: "N/A" },
+    selectedTableDetails: null,
     error: null,
   });
+
+  // --- NOVA FUNÇÃO PARA BUSCAR DETALHES DA MESA ---
+  async function fetchTableDetails(restaurantId, tableId) {
+    if (!authStore.token) return;
+    state.isLoading = true;
+    state.selectedTableDetails = null;
+    try {
+      const url = `http://localhost:5000/api/management/tables/${tableId}/details?restaurant_id=${restaurantId}`;
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${authStore.token}` }
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      state.selectedTableDetails = data;
+    } catch (err) {
+      console.error("Erro ao buscar detalhes da mesa:", err);
+      state.selectedTableDetails = { error: err.message };
+    } finally {
+      state.isLoading = false;
+    }
+  }
 
   async function fetchManagementData(restaurantId = null) {
     if (!authStore.isAuthenticated) return;
@@ -84,6 +106,7 @@ export const useManagementStore = defineStore('management', () => {
   return {
     state,
     fetchManagementData,
-    updateTableStatus
+    updateTableStatus,
+    fetchTableDetails
   }
 });

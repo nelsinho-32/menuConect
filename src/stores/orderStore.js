@@ -1,22 +1,23 @@
-// src/stores/orderStore.js
-
 import { defineStore } from 'pinia';
-import { useAuthStore } from './authStore';
+import apiClient from '@/api/client'; // Importa o nosso assistente de API
 
 export const useOrderStore = defineStore('orders', () => {
-  const authStore = useAuthStore();
 
-  async function createOrder(cartItems, totalPrice) {
-    if (!authStore.token) return Promise.reject("Não autenticado");
-
+  /**
+   * Cria um novo pedido a partir dos itens do carrinho.
+   * @param {Array} cartItems - A lista de itens no carrinho.
+   * @param {number} totalPrice - O preço total do pedido.
+   * @param {number|null} reservationId - O ID da reserva associada, se houver.
+   */
+  async function createOrder(cartItems, totalPrice, reservationId = null) {
     try {
-      const response = await fetch('http://localhost:5000/api/orders', {
+      const response = await apiClient('/orders', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authStore.token}`
-        },
-        body: JSON.stringify({ cartItems, totalPrice })
+        body: JSON.stringify({ 
+          cartItems, 
+          totalPrice, 
+          reservationId // Envia o ID da reserva para o back-end
+        })
       });
 
       const data = await response.json();
@@ -25,7 +26,7 @@ export const useOrderStore = defineStore('orders', () => {
       }
       return true; // Sucesso
     } catch (error) {
-      console.error("Erro ao criar pedido:", error);
+      console.error("Erro ao criar pedido:", error.message);
       return Promise.reject(error.message);
     }
   }

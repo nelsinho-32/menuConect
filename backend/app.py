@@ -279,14 +279,12 @@ def remove_favorite_dish(current_user, dish_id):
 @token_required()
 def create_reservation(current_user):
     data = request.get_json()
-    
-    # --- A CORREÇÃO ESTÁ AQUI ---
-    # A variável 'booking_time_str' estava em falta na extração de dados.
     restaurant_id = data.get('restaurantId')
     table_id = data.get('tableId')
     booking_time_str = data.get('bookingTime')
     guests = data.get('guests')
-    # ---------------------------
+    encontro_id = data.get('encontroId', None)  # Pode ser nulo se não for um encontro
+
 
     if not all([restaurant_id, table_id, booking_time_str, guests]):
         return jsonify({"error": "Todos os campos da reserva são obrigatórios."}), 400
@@ -302,8 +300,8 @@ def create_reservation(current_user):
         if cursor.fetchone():
             return jsonify({"error": "Esta mesa já está reservada para este horário."}), 409
 
-        sql = "INSERT INTO reservations (user_id, restaurant_id, table_id, booking_time, guests, status) VALUES (%s, %s, %s, %s, %s, %s)"
-        val = (current_user['id'], restaurant_id, table_id, booking_time_mysql, guests, 'pending')
+        sql = "INSERT INTO reservations (user_id, restaurant_id, table_id, booking_time, guests, status, encontro_id) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+        val = (current_user['id'], restaurant_id, table_id, booking_time_mysql, guests, 'confirmed', encontro_id)
         cursor.execute(sql, val)
         conn.commit()
         new_id = cursor.lastrowid
@@ -715,6 +713,7 @@ def create_order(current_user):
     data = request.get_json()
     cart_items = data.get('cartItems')
     total_price = data.get('totalPrice')
+    reservation_id = data.get('reservationId')
     
     if not cart_items or not total_price:
         return jsonify({"error": "Dados do pedido incompletos."}), 400
@@ -734,8 +733,8 @@ def create_order(current_user):
 
         for restaurant_id, order_data in orders_by_restaurant.items():
             # 1. Cria a entrada principal na tabela 'orders'
-            order_sql = "INSERT INTO orders (user_id, restaurant_id, total_price) VALUES (%s, %s, %s)"
-            cursor.execute(order_sql, (current_user['id'], restaurant_id, order_data['subtotal']))
+            order_sql = "INSERT INTO orders (user_id, restaurant_id, total_price, reservation_id) VALUES (%s, %s, %s, %s)"
+            cursor.execute(order_sql, (current_user['id'], restaurant_id, order_data['subtotal'], reservation_id))
             order_id = cursor.lastrowid
 
             # 2. Insere cada item do pedido na tabela 'order_items'
@@ -797,6 +796,115 @@ def get_financial_data(current_user):
             "dailySales": float(sales_today),
             "mostPopularDish": popular_dish['dishName'] if popular_dish else "Nenhum pedido"
         })
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+# --- ROTAS PARA O PLANEADOR DE ENCONTROS ---
+
+@app.route('/api/encontros', methods=['POST'])
+@token_required()
+def create_encontro(current_user):
+    """Cria um novo encontro planeado."""
+    data = request.get_json()
+    
+    # Extrai os dados do encontro
+    restaurant_id = data.get('restaurantId')
+    table_id = data.get('selectedTable', {}).get('id')
+    encontro_time_str = data.get('dateTime') # Espera-se uma string ISO
+    payment_option = data.get('paymentOption', 'local')
+    guests = data.get('guests', [])
+
+    if not all([restaurant_id, table_id, encontro_time_str, guests]):
+        return jsonify({"error": "Dados do encontro incompletos."}), 400
+
+    try:
+        # Formata a data para o MySQL
+        dt_obj = datetime.datetime.fromisoformat(encontro_time_str.replace('Z', ''))
+        encontro_time_mysql = dt_obj.strftime('%Y-%m-%d %H:%M:%S')
+
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        # 1. Insere o encontro principal na tabela 'encontros'
+        encontro_sql = "INSERT INTO encontros (organizer_id, restaurant_id, table_id, encontro_time, payment_option) VALUES (%s, %s, %s, %s, %s)"
+        cursor.execute(encontro_sql, (current_user['id'], restaurant_id, table_id, encontro_time_mysql, payment_option))
+        encontro_id = cursor.lastrowid
+
+        # 2. Insere cada convidado e o seu menu na tabela 'encontro_guests'
+        for guest in guests:
+            guest_sql = "INSERT INTO encontro_guests (encontro_id, user_id, guest_name, menu_selection) VALUES (%s, %s, %s, %s)"
+            # O ID do usuário pode não existir se for um convidado genérico
+            user_id = guest.get('id') if isinstance(guest.get('id'), int) else None
+            menu_json = json.dumps(guest.get('menu', {}))
+            cursor.execute(guest_sql, (encontro_id, user_id, guest.get('name'), menu_json))
+        
+        conn.commit()
+        return jsonify({"message": "Encontro planeado com sucesso!", "encontroId": encontro_id}), 201
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+
+# --- ROTA PARA DETALHES DA MESA NO PAINEL DE GESTÃO ---
+
+@app.route('/api/management/tables/<string:table_id>/details', methods=['GET'])
+@token_required(roles=['admin', 'empresa'])
+def get_table_details(current_user, table_id):
+    """Busca detalhes completos de uma mesa ocupada (reserva, cliente, consumo)."""
+    restaurant_id = current_user.get('restaurant_id')
+    if current_user['role'] == 'admin':
+        restaurant_id = request.args.get('restaurant_id', restaurant_id)
+    if not restaurant_id:
+        return jsonify({"error": "Nenhum restaurante associado."}), 403
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # 1. Encontra a reserva ativa mais recente para esta mesa
+        reservation_sql = """
+            SELECT r.id as reservation_id, r.encontro_id, r.booking_time, r.guests, u.name as user_name, u.avatarUrl
+            FROM reservations r
+            JOIN users u ON r.user_id = u.id
+            WHERE r.restaurant_id = %s AND r.table_id = %s AND r.status = 'confirmed'
+            ORDER BY r.booking_time DESC
+            LIMIT 1
+        """
+        cursor.execute(reservation_sql, (restaurant_id, table_id))
+        reservation_details = cursor.fetchone()
+
+        if not reservation_details:
+            return jsonify({"error": "Nenhuma reserva ativa encontrada para esta mesa."}), 404
+
+        consumption_items = []
+        # 2. Verifica se a reserva veio de um encontro
+        if reservation_details.get('encontro_id'):
+            # Se veio de um encontro, busca os itens pré-selecionados
+            consumption_sql = "SELECT guest_name, menu_selection FROM encontro_guests WHERE encontro_id = %s"
+            cursor.execute(consumption_sql, (reservation_details['encontro_id'],))
+            encontro_guests = cursor.fetchall()
+            # Transforma o JSON do menu em algo mais fácil de ler
+            for guest in encontro_guests:
+                menu = json.loads(guest['menu_selection'])
+                for item_type, item_details in menu.items():
+                    consumption_items.append(f"{guest['guest_name']} ({item_type}): {item_details.get('dishName', 'N/A')}")
+        else:
+            # Se for uma reserva normal, busca os itens dos pedidos
+            consumption_sql = "SELECT oi.quantity, d.name as dishName FROM order_items oi JOIN dishes d ... JOIN orders o ... WHERE o.reservation_id = %s"
+            cursor.execute(consumption_sql, (reservation_details['reservation_id'],))
+            consumption_items = [f"{item['quantity']}x {item['dishName']}" for item in cursor.fetchall()]
+
+        response_data = {"reservation": reservation_details, "consumption": consumption_items}
+        return jsonify(response_data)
 
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500

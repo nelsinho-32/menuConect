@@ -1,7 +1,9 @@
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+import { useAuthStore } from './authStore';
 
 export const useEncontroStore = defineStore('encontro', () => {
+  const authStore = useAuthStore();
   const plannedEncontro = ref(null);
   const isPlanning = computed(() => plannedEncontro.value !== null);
 
@@ -9,12 +11,11 @@ export const useEncontroStore = defineStore('encontro', () => {
     plannedEncontro.value = {
       restaurantId: restaurant.id,
       restaurantName: restaurant.name,
-      step: 'table', // table -> dateTime -> guests -> invites -> menu -> payment -> confirm
+      step: 'table',
       organizerName: organizer.name,
       selectedTable: null,
       dateTime: null,
-      // O organizador já começa como o primeiro convidado
-      guests: [{ id: organizer.id, name: organizer.name, menu: {} }],
+      guests: [{ id: organizer.id, name: organizer.name, menu: {}, isPlaceholder: false }],
       paymentOption: 'local',
     };
   }
@@ -28,11 +29,40 @@ export const useEncontroStore = defineStore('encontro', () => {
 
   function setDateTime(date, time) {
     if (plannedEncontro.value) {
-      const [year, month, day] = date.split('-').map(Number);
-      const [hours, minutes] = time.split(':').map(Number);
-      plannedEncontro.value.dateTime = new Date(year, month - 1, day, hours, minutes);
-      plannedEncontro.value.step = 'guests';
+        // CORREÇÃO: Monta a string no formato que o backend espera, sem conversão de fuso horário.
+        plannedEncontro.value.dateTime = `${date} ${time}:00`;
+        plannedEncontro.value.step = 'guests';
     }
+}
+
+  async function saveEncontroToAPI() {
+    if (!plannedEncontro.value || !authStore.token) {
+      return Promise.reject("Dados do encontro ou autenticação em falta.");
+    }
+    try {
+      const response = await fetch('http://localhost:5000/api/encontros', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authStore.token}`
+        },
+        body: JSON.stringify(plannedEncontro.value)
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Falha ao salvar o encontro.");
+      }
+      // Limpa o planeador após o sucesso
+      cancelPlanning();
+      return data; // Retorna os dados de sucesso
+    } catch (error) {
+      console.error("Erro ao salvar encontro:", error);
+      return Promise.reject(error.message);
+    }
+  }
+
+  function cancelPlanning() {
+    plannedEncontro.value = null;
   }
 
   function setGuests(count, organizer) {
@@ -56,12 +86,25 @@ export const useEncontroStore = defineStore('encontro', () => {
     }
   }
   
-  function setGuestMenu(guestId, itemType, item) {
-    if (plannedEncontro.value) {
-        const guest = plannedEncontro.value.guests.find(g => g.id === guestId);
-        if(guest) {
-            guest.menu[itemType] = item;
-        }
+   function setGuestMenu(guestId, itemType, item) {
+    if (!plannedEncontro.value) return;
+
+    // Encontra o índice do convidado na lista
+    const guestIndex = plannedEncontro.value.guests.findIndex(g => g.id === guestId);
+
+    if (guestIndex > -1) {
+        // Pega numa cópia do convidado que queremos alterar
+        const updatedGuest = { ...plannedEncontro.value.guests[guestIndex] };
+        
+        // Atualiza o menu nesse convidado copiado
+        updatedGuest.menu = {
+            ...updatedGuest.menu,
+            [itemType]: item
+        };
+
+        // Substitui o objeto antigo pelo novo na lista.
+        // Isto garante que a reatividade do Vue é acionada de forma limpa.
+        plannedEncontro.value.guests[guestIndex] = updatedGuest;
     }
   }
 
@@ -78,6 +121,6 @@ export const useEncontroStore = defineStore('encontro', () => {
 
   return {
     plannedEncontro, isPlanning, startPlanning, setTable, setDateTime,
-    setGuests, inviteGuest, setGuestMenu, setPayment, cancelPlanning
+    setGuests, inviteGuest, setGuestMenu, setPayment, cancelPlanning, saveEncontroToAPI
   }
 })

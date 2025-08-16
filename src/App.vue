@@ -146,6 +146,39 @@ const loadUserProfileFromLocalStorage = () => {
     }
 };
 
+// --- FUNÇÃO "MAESTRO" ---
+/**
+ * Carrega todos os dados iniciais necessários para um usuário autenticado.
+ * Esta função só deve ser chamada DEPOIS que o login for confirmado.
+ */
+const loadInitialUserData = async () => {
+  try {
+    // O 'await' garante que a lista de restaurantes (pública) carrega primeiro.
+    await restaurantStore.fetchRestaurantsFromAPI();
+    
+    // Agora, busca todos os dados específicos do usuário em paralelo.
+    await Promise.all([
+      userDataStore.fetchAllUserData(),
+      reservationStore.fetchAllUserReservations()
+      // Adicione aqui outras funções de carregamento, se houver.
+    ]);
+  } catch (error) {
+    console.error("Ocorreu um erro ao carregar os dados iniciais do usuário:", error);
+    showToast("Não foi possível carregar os seus dados. Tente novamente.", "error");
+  }
+};
+
+// Hook onMounted é executado quando a aplicação arranca
+onMounted(() => {
+  // 1. Tenta fazer o auto-login a partir do localStorage.
+  authStore.tryAutoLogin();
+
+  // 2. Se o auto-login funcionou (o token existe), carrega os dados do usuário.
+  if (authStore.isAuthenticated) {
+    loadInitialUserData();
+  }
+});
+
 // Quando a aplicação é montada, carrega tudo a partir das fontes corretas.
 onMounted(() => {
     if (authStore.isAuthenticated) {
@@ -158,6 +191,24 @@ onMounted(() => {
     loadUserProfileFromLocalStorage();
     userDataStore.fetchAllUserData();
 });
+
+onMounted(async () => {
+  // 1. Primeiro, tenta fazer o auto-login a partir do localStorage.
+  authStore.tryAutoLogin();
+
+  // 2. SÓ SE o usuário estiver autenticado, busca todos os outros dados.
+  if (authStore.isAuthenticated) {
+    // O 'await' garante que a lista de restaurantes carrega primeiro.
+    await restaurantStore.fetchRestaurantsFromAPI();
+    
+    // Agora que temos os restaurantes, podemos buscar os dados do usuário em paralelo.
+    await Promise.all([
+      userDataStore.fetchAllUserData(),
+      reservationStore.fetchAllUserReservations()
+    ]);
+  }
+});
+
 
 // --- MÉTODOS ---
 const showToast = (message, type = 'success') => {
@@ -192,6 +243,7 @@ const handleLogin = async (credentials) => {
         userStore.setUserRole(authStore.currentUser.role);
         showToast(`Bem-vindo de volta, ${authStore.currentUser.name}!`);
         await restaurantStore.fetchRestaurantsFromAPI();
+        await loadInitialUserData();
         // Agora podemos buscar os dados específicos do usuário com segurança
         userDataStore.fetchAllUserData();
         reservationStore.fetchAllUserReservations();
@@ -272,7 +324,7 @@ const handleBooking = async ({ restaurant, table, date, time, guests }) => {
         const reservationData = {
             restaurantId: restaurant.id,
             tableId: table.id,
-            bookingTime: bookingTimeForAPI,
+             bookingTime: `${dateTime.date} ${dateTime.time}:00`,
             guests: guests
         };
 
@@ -287,7 +339,7 @@ const handleBooking = async ({ restaurant, table, date, time, guests }) => {
 
             confirmationModalMessage.value = "A sua reserva foi confirmada com sucesso!";
             isConfirmationModalOpen.value = true;
-            
+
             // A lógica do WhatsApp precisa da data completa, então criamos o objeto aqui.
             const [year, month, day] = date.split('-').map(Number);
             const [hours, minutes] = time.split(':').map(Number);
@@ -296,7 +348,7 @@ const handleBooking = async ({ restaurant, table, date, time, guests }) => {
             setTimeout(() => {
                 sendWhatsAppConfirmation({ restaurant, table, dateTime: localDateTime, guests });
             }, 500);
-            
+
             goToView('myReservations');
         }
     } catch (errorMsg) {
@@ -312,34 +364,47 @@ const addToCart = ({ dish, quantity, isPlanned = false, dineOption = 'delivery',
     showToast(`${quantity}x '${dish.dishName}' adicionado!`);
 };
 
-const handleConfirmEncontro = (encontroData) => {
-    if (encontroData.paymentOption === 'agora') {
-        encontroData.guests.forEach(guest => {
-            Object.values(guest.menu).forEach(dishObject => {
-                if (dishObject && dishObject.id) {
-                    addToCart({
-                        dish: dishObject,
-                        quantity: 1,
-                        isPlanned: true,
-                        dineOption: 'dine-in', // Encontros planeados são para comer no local
-                        customization: dishObject.customization || null
-                    });
-                }
+const handleConfirmEncontro = async (encontroData) => {
+    try {
+        const savedEncontro = await encontroStore.saveEncontroToAPI();
+
+        if (encontroData.paymentOption === 'agora') {
+            encontroData.guests.forEach(guest => {
+                Object.values(guest.menu).forEach(dishObject => {
+                    if (dishObject && dishObject.id) {
+                        addToCart({
+                            dish: { ...dishObject, restaurantId: encontroData.restaurantId, restaurantName: encontroData.restaurantName },
+                            quantity: 1, isPlanned: true, dineOption: 'dine-in',
+                            // ANEXA OS DADOS NECESSÁRIOS PARA DEPOIS DO PAGAMENTO
+                            encontroPayload: {
+                                restaurantId: encontroData.restaurantId,
+                                tableId: encontroData.selectedTable.id,
+                                dateTime: encontroData.dateTime,
+                                guests: encontroData.guests.length,
+                                encontroId: savedEncontro.encontroId,
+                                menu: encontroData.guests.map(g => g.menu) // Passa o menu para o WhatsApp
+                            }
+                        });
+                    }
+                });
             });
-        });
-        goToView('cart');
+            goToView('cart');
+            showToast(`Encontro planeado! Por favor, finalize o pagamento.`);
+        } else { // 'Pagar no Local'
+            await reservationStore.createReservation({
+                restaurantId: encontroData.restaurantId,
+                tableId: encontroData.selectedTable.id,
+                bookingTime: encontroData.dateTime,
+                guests: encontroData.guests.length,
+                status: 'confirmed',
+                encontroId: savedEncontro.encontroId
+            });
+            await restaurantStore.fetchRestaurantsFromAPI(); // <-- ATUALIZA O MAPA
+            showToast(`Encontro planeado com sucesso e mesa reservada!`);
+        }
+    } catch (errorMsg) {
+        showToast(`Erro: ${errorMsg}`, 'error');
     }
-    const restaurant = restaurantStore.restaurants.find(r => r.id === encontroData.restaurantId);
-    if (restaurant) {
-        handleBooking({
-            restaurant,
-            table: encontroData.selectedTable,
-            dateTime: encontroData.dateTime,
-            guests: encontroData.guests.length
-        });
-    }
-    showToast(`Encontro planeado! Convites enviados.`);
-    encontroStore.cancelPlanning();
 };
 
 const showSharedReservation = (encontroData, invitedUser) => {
@@ -478,34 +543,44 @@ const closePaymentModal = () => isPaymentModalOpen.value = false;
 
 const handlePaymentSuccess = async () => {
     if (cart.length === 0) return;
-
-    // Calcula o total final (pode ser mais complexo no futuro)
     const finalTotal = cart.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
+    const encontroItem = cart.find(item => item.isPlanned && item.encontroPayload);
 
     try {
-        // Envia o pedido para o back-end através da store
-        await orderStore.createOrder(cart, finalTotal);
+        let reservationIdParaPedido = null;
+        if (encontroItem) {
+            // 1. Se for um encontro, PRIMEIRO cria a reserva
+            const reservationResult = await reservationStore.createReservation({
+                ...encontroItem.encontroPayload,
+                status: 'confirmed'
+            });
+            reservationIdParaPedido = reservationResult.reservationId;
 
-        // Limpa o carrinho e modais
+            // 2. Envia a notificação do WhatsApp com todos os detalhes
+            // (Esta função precisará ser adaptada para formatar o menu)
+            // sendWhatsAppConfirmation({ ...encontroItem.encontroPayload, menu: encontroItem.encontroPayload.menu });
+        }
+
+        // 3. DEPOIS, cria o pedido, agora com o ID da reserva
+        await orderStore.createOrder(cart, finalTotal, reservationIdParaPedido);
+
+        // 4. ATUALIZA TUDO
         cart.length = 0;
         closePaymentModal();
         closePixModal();
+        await restaurantStore.fetchRestaurantsFromAPI(); // <-- ESSENCIAL para atualizar o status da mesa
         goToView('home');
-        showToast("Pedido realizado com sucesso! Obrigado!");
-        // Opcional: recarregar os dados de gestão se o usuário for empresa/admin
-        if (authStore.currentUser?.role !== 'cliente') {
-            managementStore.fetchManagementData();
-        }
-
+        showToast("Pedido realizado e pago com sucesso! Obrigado!");
     } catch (errorMsg) {
-        showToast(errorMsg, 'error');
+        showToast(`Erro no pagamento: ${errorMsg}`, 'error');
     }
 };
 
 const openTableDetailModal = (table) => {
+    managementStore.fetchTableDetails(managedRestaurant.value.id, table.id);
     currentTableForDetail.value = table;
     isTableDetailModalOpen.value = true;
-};
+}
 
 const handleUpdateTableStatus = ({ tableId, status }) => {
     // A gestão é feita pelo clique na modal, mas o evento vem da TableDetailModal
@@ -732,8 +807,7 @@ const closeCustomizeModal = () => {
                 :category="menuItemModalProps.category" @close="isSelectMenuItemModalOpen = false"
                 @item-selected="handleMenuItemSelection" />
             <TableDetailModal v-if="isTableDetailModalOpen" :table="currentTableForDetail"
-                :reservations="userReservations" :order-history="orderHistory" :user-profile="userProfile"
-                @close="isTableDetailModalOpen = false" @update-status="handleUpdateTableStatus" />
+                :details="managementStore.state.selectedTableDetails" @close="isTableDetailModalOpen = false" />
             <ChatModal />
             <MenuModal v-if="isMenuModalOpen" :restaurant="currentRestaurantForMenu" @close="closeMenuModal"
                 @open-action-modal="openActionModal" />

@@ -14,11 +14,11 @@
                     
                     <div class="flex-grow flex flex-col">
                         <div>
-                            <h4 class="font-bold text-lg">{{ item.name }}</h4>
+                            <h4 class="font-bold text-lg">{{ item.name || item.dishName }}</h4>
                             <p class="text-sm text-gray-500 mt-1">{{ item.description }}</p>
                         </div>
                         <div class="mt-auto">
-                             <p class="font-bold text-indigo-600 text-lg">R$ {{ item.price.toFixed(2).replace('.', ',') }}</p>
+                             <p class="font-bold text-indigo-600 text-lg">R$ {{ parseFloat(item.price).toFixed(2).replace('.', ',') }}</p>
                         </div>
                     </div>
                 </div>

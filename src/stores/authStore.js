@@ -19,27 +19,29 @@ export const useAuthStore = defineStore('auth', () => {
    * Guarda o estado de autenticação no localStorage.
    */
   function setAuthData(userData, userToken) {
-     const userToSave = {
-        id: userData.id,
-        name: userData.name,
-        email: userData.email,
-        role: userData.role,
-        restaurant_id: userData.restaurant_id // <-- Adicionado
-    };
     user.value = userData;
     token.value = userToken;
     localStorage.setItem('menuConnectUser', JSON.stringify(userData));
     localStorage.setItem('menuConnectToken', userToken);
   }
 
-  /**
-   * Limpa o estado de autenticação.
-   */
   function clearAuthData() {
     user.value = null;
     token.value = null;
     localStorage.removeItem('menuConnectUser');
     localStorage.removeItem('menuConnectToken');
+  }
+
+  /**
+   * Tenta carregar o usuário do localStorage no arranque da aplicação.
+   */
+  function tryAutoLogin() {
+    const storedToken = localStorage.getItem('menuConnectToken');
+    const storedUser = localStorage.getItem('menuConnectUser');
+    if (storedToken && storedUser) {
+      token.value = storedToken;
+      user.value = JSON.parse(storedUser);
+    }
   }
 
   /**
@@ -147,5 +149,6 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     updateProfile,
+    tryAutoLogin,
   }
 })

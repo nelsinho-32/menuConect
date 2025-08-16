@@ -1,143 +1,130 @@
-import { ref } from 'vue'
-import { defineStore } from 'pinia'
-import { useAuthStore } from './authStore'
+import { ref } from 'vue';
+import { defineStore } from 'pinia';
+import apiClient from '@/api/client'; // Importa o nosso novo assistente de API
 
 export const useUserDataStore = defineStore('userData', () => {
-  const authStore = useAuthStore();
-
   // --- STATE ---
-  // Usamos um Set para performance, guardando apenas os IDs dos restaurantes favoritos.
   const favoriteRestaurantIds = ref(new Set());
-   const favoriteDishIds = ref(new Set());
+  const favoriteDishIds = ref(new Set());
 
   // --- ACTIONS ---
 
-   async function fetchAllUserData() {
-    if (!authStore.token) return;
-    await fetchFavoriteRestaurants();
-    await fetchFavoriteDishes(); // <-- CHAMADA NOVA
+  /**
+   * Busca todos os dados de preferência do usuário (restaurantes e pratos favoritos).
+   */
+  async function fetchAllUserData() {
+    // Executa as duas chamadas em paralelo para maior eficiência
+    await Promise.all([
+      fetchFavoriteRestaurants(),
+      fetchFavoriteDishes()
+    ]);
   }
 
-  // --- FUNÇÃO PARA BUSCAR PRATOS FAVORITOS ---
-  async function fetchFavoriteDishes() {
-    if (!authStore.token) return;
+  /**
+   * Busca os IDs dos restaurantes favoritos do usuário na API.
+   */
+  async function fetchFavoriteRestaurants() {
     try {
-      const response = await fetch('http://localhost:5000/api/favorites/dishes', {
-        headers: { 'Authorization': `Bearer ${authStore.token}` }
-      });
+      const response = await apiClient('/favorites/restaurants');
       const data = await response.json();
-      if (response.ok) {
-        favoriteDishIds.value = new Set(data);
-      } else { throw new Error(data.error); }
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao buscar restaurantes favoritos.');
+      }
+      favoriteRestaurantIds.value = new Set(data);
     } catch (error) {
-      console.error("Erro ao buscar pratos favoritos:", error);
+      console.error("Erro em fetchFavoriteRestaurants:", error.message);
     }
   }
 
-  // --- FUNÇÃO PARA ADICIONAR/REMOVER PRATO FAVORITO ---
-  async function toggleFavoriteDish(dishId) {
-    if (!authStore.token) return null;
+  /**
+   * Busca os IDs dos pratos favoritos do usuário na API.
+   */
+  async function fetchFavoriteDishes() {
+    try {
+      const response = await apiClient('/favorites/dishes');
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao buscar pratos favoritos.');
+      }
+      favoriteDishIds.value = new Set(data);
+    } catch (error) {
+      console.error("Erro em fetchFavoriteDishes:", error.message);
+    }
+  }
 
-    const isFavorited = favoriteDishIds.value.has(dishId);
-    const url = `http://localhost:5000/api/favorites/dishes${isFavorited ? `/${dishId}` : ''}`;
+  /**
+   * Adiciona ou remove um restaurante dos favoritos.
+   * @param {number} restaurantId - O ID do restaurante.
+   * @returns {Promise<'added'|'removed'|null>}
+   */
+  async function toggleFavoriteRestaurant(restaurantId) {
+    const isFavorited = favoriteRestaurantIds.value.has(restaurantId);
     const method = isFavorited ? 'DELETE' : 'POST';
+    const endpoint = isFavorited ? `/favorites/restaurants/${restaurantId}` : '/favorites/restaurants';
 
     try {
-      const response = await fetch(url, {
+      const response = await apiClient(endpoint, {
         method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authStore.token}`
-        },
-        body: method === 'POST' ? JSON.stringify({ dishId }) : null
+        body: method === 'POST' ? JSON.stringify({ restaurantId }) : null
       });
-      
-      const data = await response.json();
-      if (response.ok) {
-        if (isFavorited) {
-          favoriteDishIds.value.delete(dishId);
-          return 'removed';
-        } else {
-          favoriteDishIds.value.add(dishId);
-          return 'added';
-        }
-      } else { throw new Error(data.error); }
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Falha ao alternar favorito.');
+      }
+
+      if (isFavorited) {
+        favoriteRestaurantIds.value.delete(restaurantId);
+        return 'removed';
+      } else {
+        favoriteRestaurantIds.value.add(restaurantId);
+        return 'added';
+      }
     } catch (error) {
-      console.error("Erro ao alternar prato favorito:", error);
+      console.error("Erro em toggleFavoriteRestaurant:", error.message);
       return null;
     }
   }
 
   /**
-   * Busca os IDs dos restaurantes favoritos do usuário na API e preenche o nosso Set.
+   * Adiciona ou remove um prato dos favoritos.
+   * @param {number} dishId - O ID do prato.
+   * @returns {Promise<'added'|'removed'|null>}
    */
-  async function fetchFavoriteRestaurants() {
-    if (!authStore.token) return;
-
+  async function toggleFavoriteDish(dishId) {
+    const isFavorited = favoriteDishIds.value.has(dishId);
+    const method = isFavorited ? 'DELETE' : 'POST';
+    const endpoint = isFavorited ? `/favorites/dishes/${dishId}` : '/favorites/dishes';
+    
     try {
-      const response = await fetch('http://localhost:5000/api/favorites/restaurants', {
-        headers: { 'Authorization': `Bearer ${authStore.token}` }
-      });
-      const data = await response.json();
-      if (response.ok) {
-        // 'data' é uma lista de IDs, ex: [1, 5, 12]
-        favoriteRestaurantIds.value = new Set(data);
-      } else {
-        throw new Error(data.error || 'Falha ao buscar favoritos.');
-      }
+        const response = await apiClient(endpoint, {
+            method: method,
+            body: method === 'POST' ? JSON.stringify({ dishId }) : null
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Falha ao alternar favorito.');
+        }
+
+        if (isFavorited) {
+            favoriteDishIds.value.delete(dishId);
+            return 'removed';
+        } else {
+            favoriteDishIds.value.add(dishId);
+            return 'added';
+        }
     } catch (error) {
-      console.error("Erro ao buscar restaurantes favoritos:", error);
+        console.error("Erro em toggleFavoriteDish:", error.message);
+        return null;
     }
   }
 
-    /**
-    * Adiciona ou remove um restaurante dos favoritos, comunicando com a API.
-    * @param {number} restaurantId - O ID do restaurante a ser favoritado/desfavoritado.
-    * @returns {Promise<'added'|'removed'|null>} - A ação realizada ou nulo em caso de erro.
-    */
-  async function toggleFavoriteRestaurant(restaurantId) {
-    if (!authStore.token) return;
-
-    const isFavorited = favoriteRestaurantIds.value.has(restaurantId);
-    const url = `http://localhost:5000/api/favorites/restaurants${isFavorited ? `/${restaurantId}` : ''}`;
-    const method = isFavorited ? 'DELETE' : 'POST';
-
-    try {
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authStore.token}`
-        },
-        // O body só é necessário para o POST
-        body: method === 'POST' ? JSON.stringify({ restaurantId }) : null
-      });
-
-      const data = await response.json();
-          if (response.ok) {
-            if (isFavorited) {
-              favoriteRestaurantIds.value.delete(restaurantId);
-              return 'removed';
-            } else {
-              favoriteRestaurantIds.value.add(restaurantId);
-              return 'added';
-            }
-          } else {
-            throw new Error(data.error || 'Falha ao atualizar favorito.');
-          }
-        } catch (error) {
-          console.error("Erro ao alternar favorito:", error);
-          return null; // Retorna nulo em caso de erro
-        }
-  }
-
   return {
-    favoriteRestaurantIds, 
-    favoriteDishIds, 
-    fetchAllUserData, 
-    fetchFavoriteRestaurants,
-    fetchFavoriteDishes, 
+    favoriteRestaurantIds,
+    favoriteDishIds,
+    fetchAllUserData,
     toggleFavoriteRestaurant,
-    toggleFavoriteDish,
-  }
-})
+    toggleFavoriteDish
+  };
+});
