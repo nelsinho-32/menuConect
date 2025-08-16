@@ -10,8 +10,9 @@
 
             <div class="p-6 overflow-y-auto">
                 <RestaurantMenu 
-                    :menu="restaurant.menu" 
-                    @open-action-modal="dish => $emit('openActionModal', dish)"
+                    :menu="restaurant.menu"
+                    :restaurant-id="restaurant.id"  @open-action-modal="dish => $emit('openActionModal', dish)"
+                    @open-add-menu-item-modal="category => $emit('openAddDishModal', { restaurant, category })"
                 />
             </div>
         </div>
@@ -24,5 +25,6 @@ import RestaurantMenu from './RestaurantMenu.vue';
 defineProps({
     restaurant: { type: Object, required: true }
 });
-defineEmits(['close', 'openActionModal']);
+
+defineEmits(['close', 'openActionModal', 'openAddDishModal']);
 </script>

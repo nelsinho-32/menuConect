@@ -578,6 +578,233 @@ def list_routes():
             
     return jsonify(sorted(output, key=lambda r: r['rule']))
 
+# --- ROTAS DE GESTÃO PARA EMPRESAS E ADMINS ---
+
+@app.route('/api/management/reservations', methods=['GET'])
+@token_required(roles=['admin', 'empresa'])
+def get_management_reservations(current_user):
+    """Busca todas as reservas ativas para o restaurante do usuário logado."""
+    
+    restaurant_id = current_user.get('restaurant_id')
+    # Se for um admin, ele pode opcionalmente passar um restaurant_id para ver
+    if current_user['role'] == 'admin' and not restaurant_id:
+        restaurant_id = request.args.get('restaurant_id')
+        if not restaurant_id:
+            return jsonify({"error": "Admin deve especificar um restaurant_id"}), 400
+
+    if not restaurant_id:
+        return jsonify({"error": "Usuário empresa não está associado a um restaurante."}), 403
+
+    sql = """
+        SELECT r.id, r.table_id, r.booking_time, r.guests, r.status, u.name as user_name
+        FROM reservations r
+        JOIN users u ON r.user_id = u.id
+        WHERE r.restaurant_id = %s AND r.status IN ('confirmed', 'pending')
+        ORDER BY r.booking_time ASC
+    """
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(sql, (restaurant_id,))
+        reservations = cursor.fetchall()
+        for res in reservations:
+            if isinstance(res['booking_time'], datetime.datetime):
+                res['booking_time'] = res['booking_time'].isoformat()
+        cursor.close()
+        conn.close()
+        return jsonify(reservations)
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+
+@app.route('/api/management/waitlist', methods=['GET'])
+@token_required(roles=['admin', 'empresa'])
+def get_management_waitlist(current_user):
+    """Busca a fila de espera para o restaurante do usuário logado."""
+    restaurant_id = current_user.get('restaurant_id')
+    if current_user['role'] == 'admin' and not restaurant_id:
+        restaurant_id = request.args.get('restaurant_id')
+        if not restaurant_id:
+            return jsonify({"error": "Admin deve especificar um restaurant_id"}), 400
+    
+    if not restaurant_id:
+        return jsonify({"error": "Usuário empresa não está associado a um restaurante."}), 403
+
+    sql = """
+        SELECT u.name as user_name, u.phone, w.created_at
+        FROM waitlist w
+        JOIN users u ON w.user_id = u.id
+        WHERE w.restaurant_id = %s
+        ORDER BY w.created_at ASC
+    """
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(sql, (restaurant_id,))
+        waitlist = cursor.fetchall()
+        for entry in waitlist:
+            if isinstance(entry['created_at'], datetime.datetime):
+                entry['created_at'] = entry['created_at'].isoformat()
+        cursor.close()
+        conn.close()
+        return jsonify(waitlist)
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+
+@app.route('/api/management/tables/<string:table_id>/status', methods=['PUT'])
+@token_required(roles=['admin', 'empresa'])
+def update_table_status_management(current_user, table_id):
+    """Atualiza o status de uma mesa específica."""
+    data = request.get_json()
+    new_status = data.get('status')
+    # O ID do restaurante agora vem no corpo do pedido.
+    restaurant_id = data.get('restaurantId')
+    
+    if not restaurant_id:
+        return jsonify({"error": "restaurantId é obrigatório."}), 400
+
+    # Lógica de permissão
+    if current_user['role'] == 'empresa' and current_user.get('restaurant_id') != restaurant_id:
+        return jsonify({"error": "Permissão negada para editar este mapa."}), 403
+    
+    if new_status not in ['available', 'occupied', 'cleaning']:
+        return jsonify({"error": "Status inválido."}), 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        
+        # Pega o mapa atual
+        cursor.execute("SELECT map_layout FROM restaurants WHERE id = %s", (restaurant_id,))
+        result = cursor.fetchone()
+        if not (result and result['map_layout']):
+            return jsonify({"error": "Layout do mapa não encontrado."}), 404
+
+        map_layout = json.loads(result['map_layout'])
+        table_found = False
+        for table in map_layout.get('tables', []):
+            if str(table.get('id')) == str(table_id):
+                table['status'] = new_status
+                table_found = True
+                break
+        
+        if not table_found:
+            return jsonify({"error": f"Mesa '{table_id}' não encontrada no layout."}), 404
+
+        # Salva o mapa atualizado
+        updated_map_json = json.dumps(map_layout)
+        cursor.execute("UPDATE restaurants SET map_layout = %s WHERE id = %s", (updated_map_json, restaurant_id))
+        conn.commit()
+        
+        return jsonify({"message": f"Status da mesa {table_id} atualizado para {new_status}."})
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+            
+# --- ROTAS DE PEDIDOS E FINANCEIRO ---
+
+@app.route('/api/orders', methods=['POST'])
+@token_required()
+def create_order(current_user):
+    """Cria um novo pedido a partir dos dados do carrinho."""
+    data = request.get_json()
+    cart_items = data.get('cartItems')
+    total_price = data.get('totalPrice')
+    
+    if not cart_items or not total_price:
+        return jsonify({"error": "Dados do pedido incompletos."}), 400
+
+    # Agrupa os itens por restaurante para criar um pedido para cada um
+    orders_by_restaurant = {}
+    for item in cart_items:
+        restaurant_id = item.get('restaurantId')
+        if restaurant_id not in orders_by_restaurant:
+            orders_by_restaurant[restaurant_id] = {'items': [], 'subtotal': 0}
+        orders_by_restaurant[restaurant_id]['items'].append(item)
+        orders_by_restaurant[restaurant_id]['subtotal'] += Decimal(item.get('price', 0)) * int(item.get('quantity', 0))
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        for restaurant_id, order_data in orders_by_restaurant.items():
+            # 1. Cria a entrada principal na tabela 'orders'
+            order_sql = "INSERT INTO orders (user_id, restaurant_id, total_price) VALUES (%s, %s, %s)"
+            cursor.execute(order_sql, (current_user['id'], restaurant_id, order_data['subtotal']))
+            order_id = cursor.lastrowid
+
+            # 2. Insere cada item do pedido na tabela 'order_items'
+            for item in order_data['items']:
+                item_sql = "INSERT INTO order_items (order_id, dish_id, quantity, price_at_time, customization) VALUES (%s, %s, %s, %s, %s)"
+                customization_json = json.dumps(item.get('customization')) if item.get('customization') else None
+                cursor.execute(item_sql, (order_id, item['id'], item['quantity'], Decimal(item['price']), customization_json))
+        
+        conn.commit()
+        return jsonify({"message": "Pedido criado com sucesso!"}), 201
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+
+@app.route('/api/management/financials', methods=['GET'])
+@token_required(roles=['admin', 'empresa'])
+def get_financial_data(current_user):
+    """Calcula e retorna dados financeiros para o restaurante do usuário."""
+    restaurant_id = current_user.get('restaurant_id')
+    if current_user['role'] == 'admin':
+        restaurant_id = request.args.get('restaurant_id', restaurant_id) # Admin pode especificar
+
+    if not restaurant_id:
+        return jsonify({"error": "Nenhum restaurante associado."}), 403
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # 1. Calcula as vendas do dia (hoje)
+        sales_today_sql = """
+            SELECT SUM(total_price) as total
+            FROM orders
+            WHERE restaurant_id = %s AND DATE(created_at) = CURDATE()
+        """
+        cursor.execute(sales_today_sql, (restaurant_id,))
+        sales_today = cursor.fetchone()['total'] or 0
+
+        # 2. Encontra o prato mais popular
+        popular_dish_sql = """
+            SELECT d.name as dishName, SUM(oi.quantity) as total_sold
+            FROM order_items oi
+            JOIN dishes d ON oi.dish_id = d.id
+            JOIN orders o ON oi.order_id = o.id
+            WHERE o.restaurant_id = %s
+            GROUP BY d.name
+            ORDER BY total_sold DESC
+            LIMIT 1
+        """
+        cursor.execute(popular_dish_sql, (restaurant_id,))
+        popular_dish = cursor.fetchone()
+
+        return jsonify({
+            "dailySales": float(sales_today),
+            "mostPopularDish": popular_dish['dishName'] if popular_dish else "Nenhum pedido"
+        })
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
 # --- Executar a Aplicação ---
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

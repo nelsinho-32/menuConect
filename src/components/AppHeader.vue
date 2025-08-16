@@ -31,14 +31,19 @@
                 class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
                 <span class="mr-3">🧾</span> Histórico de Pedidos
               </button>
-              <button v-if="authStore.currentUser && (authStore.currentUser.role === 'empresa' || authStore.currentUser.role === 'admin')" @click="navigate('dashboard')"
+              <button v-if="authStore.currentUser && (authStore.currentUser.role === 'empresa' || authStore.currentUser.role === 'admin')" 
+                        @click="navigate('dashboard')" 
+                        class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
+                   <span class="mr-3">🏠</span> Painel de Gestão
+                </button>
+              <!-- <button v-if="authStore.currentUser && (authStore.currentUser.role === 'empresa' || authStore.currentUser.role === 'admin')" @click="navigate('dashboard')"
                 class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
                 <span class="mr-3">🏠</span> Dashboard
               </button>
               <button v-if="authStore.currentUser && (authStore.currentUser.role === 'empresa' || authStore.currentUser.role === 'admin')" @click="navigate('tableManagement')"
                 class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
                 <span class="mr-3">📊</span> Gestão de Mesas
-              </button>
+              </button> -->
               <div class="border-t my-2"></div>
               <button @click="$emit('logout')"
                 class="w-full text-left flex items-center px-4 py-2 text-red-600 hover:bg-red-50">

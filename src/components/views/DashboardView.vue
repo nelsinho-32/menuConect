@@ -1,4 +1,4 @@
-<template>
+<!-- <template>
     <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-2">
             <div>
@@ -89,4 +89,4 @@ const mostPopularDish = computed(() => {
     return lastOrder.items[0]?.dishName || "N/A";
 });
 
-</script>
+</script> -->

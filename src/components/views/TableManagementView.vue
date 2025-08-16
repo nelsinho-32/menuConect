@@ -1,4 +1,4 @@
-<template>
+<!-- <template>
     <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-3xl font-bold">Gestão de Mesas</h1>
@@ -74,4 +74,4 @@ const getStatusText = (status) => {
     if (status === 'cleaning') return 'A Limpar';
     return 'Indefinido';
 }
-</script>
+</script> -->

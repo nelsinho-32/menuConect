@@ -15,12 +15,13 @@ import CartView from './components/CartView.vue';
 import FavoriteRestaurantsView from './components/views/FavoriteRestaurantsView.vue';
 import FavoriteDishesView from './components/views/FavoriteDishesView.vue';
 import OrderHistoryView from './components/views/OrderHistoryView.vue';
-import TableManagementView from './components/views/TableManagementView.vue';
+// import TableManagementView from './components/views/TableManagementView.vue';
 import ReservationSharedView from './components/views/ReservationSharedView.vue';
 import RouteView from './components/views/RouteView.vue';
-import DashboardView from './components/views/DashboardView.vue';
+// import DashboardView from './components/views/DashboardView.vue';
 import LoginView from './components/views/LoginView.vue';
 import RegisterView from './components/views/RegisterView.vue';
+import ManagementView from './components/views/ManagementView.vue';
 
 // Modais
 import ActionModal from './components/ActionModal.vue';
@@ -44,6 +45,7 @@ import { useChatStore } from './stores/chatStore';
 import { useAuthStore } from './stores/authStore';
 import { useUserDataStore } from './stores/userDataStore';
 import { useReservationStore } from './stores/reservationStore';
+import { useOrderStore } from './stores/orderStore'
 
 // 2. Ativação das stores para usar no componente
 const restaurantStore = useRestaurantStore();
@@ -53,7 +55,7 @@ const userStore = useUserStore();
 const authStore = useAuthStore();
 const userDataStore = useUserDataStore();
 const reservationStore = useReservationStore();
-
+const orderStore = useOrderStore();
 
 // --- ESTADO REATIVO (EXISTENTE) ---
 const cart = reactive([]);
@@ -190,6 +192,9 @@ const handleLogin = async (credentials) => {
         userStore.setUserRole(authStore.currentUser.role);
         showToast(`Bem-vindo de volta, ${authStore.currentUser.name}!`);
         await restaurantStore.fetchRestaurantsFromAPI();
+        // Agora podemos buscar os dados específicos do usuário com segurança
+        userDataStore.fetchAllUserData();
+        reservationStore.fetchAllUserReservations();
         goToView('home');
     } catch (errorMsg) {
         showToast(errorMsg, 'error');
@@ -471,45 +476,30 @@ const openCheckout = (shortcut = null) => {
 const closePixModal = () => isPixModalOpen.value = false;
 const closePaymentModal = () => isPaymentModalOpen.value = false;
 
-// função para lidar com o sucesso do pagamento
-const handlePaymentSuccess = () => {
+const handlePaymentSuccess = async () => {
     if (cart.length === 0) return;
-    const newOrderId = Date.now();
-    // AQUI ESTÁ A CORREÇÃO: Voltamos a guardar uma cópia profunda do carrinho.
-    const itemsForHistory = JSON.parse(JSON.stringify(cart));
 
-    const deliveryRestaurants = new Set();
-    cart.forEach(item => {
-        if (item.dineOption === 'delivery' || !item.dineOption) {
-            deliveryRestaurants.add(item.restaurantId);
-        }
-    });
-    const finalDeliveryFee = deliveryRestaurants.size * 5.00;
-    const finalSubtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    // Calcula o total final (pode ser mais complexo no futuro)
+    const finalTotal = cart.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
 
-    // AQUI ESTÁ A LIGAÇÃO: Associa o ID do pedido à reserva ativa
-    if (userReservations.bookedTable) {
-        if (!userReservations.bookedTable.orderIds) {
-            userReservations.bookedTable.orderIds = [];
+    try {
+        // Envia o pedido para o back-end através da store
+        await orderStore.createOrder(cart, finalTotal);
+
+        // Limpa o carrinho e modais
+        cart.length = 0;
+        closePaymentModal();
+        closePixModal();
+        goToView('home');
+        showToast("Pedido realizado com sucesso! Obrigado!");
+        // Opcional: recarregar os dados de gestão se o usuário for empresa/admin
+        if (authStore.currentUser?.role !== 'cliente') {
+            managementStore.fetchManagementData();
         }
-        userReservations.bookedTable.orderIds.push(newOrderId);
+
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
     }
-
-    const newOrder = {
-        id: newOrderId,
-        date: new Date().toISOString(),
-        items: itemsForHistory, // Guarda a versão completa dos itens
-        total: finalSubtotal + finalDeliveryFee
-    };
-
-    orderHistory.push(newOrder);
-    saveOrderHistoryToLocalStorage();
-
-    cart.length = 0;
-    closePaymentModal();
-    closePixModal();
-    goToView('home');
-    showToast("Pedido realizado com sucesso! Obrigado!");
 };
 
 const openTableDetailModal = (table) => {
@@ -707,10 +697,11 @@ const closeCustomizeModal = () => {
                     @open-dine-options="openDineOptionsModal" @back-to-main="goToView('home')" />
                 <OrderHistoryView v-if="viewState.name === 'orderHistory'" :order-history="orderHistory"
                     @back-to-main="goToView('home')" />
-                <TableManagementView v-if="viewState.name === 'tableManagement'" :order-history="orderHistory"
-                    @open-table-detail-modal="openTableDetailModal" />
-                <DashboardView v-if="viewState.name === 'dashboard'" :reservations="userReservations"
-                    :order-history="orderHistory" @navigate-to="goToView" />
+                <!-- <TableManagementView v-if="viewState.name === 'tableManagement'" :order-history="orderHistory"
+                    @open-table-detail-modal="openTableDetailModal" /> -->
+                <ManagementView v-if="viewState.name === 'dashboard'" />
+                <!-- <DashboardView v-if="viewState.name === 'dashboard'" :reservations="userReservations"
+                    :order-history="orderHistory" @navigate-to="goToView" /> -->
                 <ReservationSharedView v-if="viewState.name === 'sharedReservation'"
                     :encounter="viewState.data.encounter" :current-user="viewState.data.currentUser"
                     :restaurant="viewState.data.restaurant" @back-to-main="goToView('home')"

@@ -5,6 +5,7 @@ import { reactive, computed } from 'vue'
 import { defineStore } from 'pinia'
 
 export const useRestaurantStore = defineStore('restaurants', () => {
+  const authStore = useAuthStore();
 
   const restaurants = reactive([])
 
@@ -29,7 +30,6 @@ export const useRestaurantStore = defineStore('restaurants', () => {
   });
 
   async function updateRestaurantMap(restaurantId, layoutData) {
-  const authStore = useAuthStore(); // Precisa de acesso à authStore
   if (!authStore.token) return Promise.reject("Não autenticado");
 
   try {
@@ -85,44 +85,41 @@ export const useRestaurantStore = defineStore('restaurants', () => {
   // mas por agora só atualizam o estado no frontend.
   // Nos próximos passos, faremos com que elas também chamem a API.
 
-  // ---- NOVA VERSÃO DA FUNÇÃO addRestaurant ----
+  // ---- FUNÇÃO addRestaurant ----
 async function addRestaurant(newRestaurantData) {
-  try {
-    // Envia os dados do novo restaurante para a API via método POST
-    const response = await fetch('http://localhost:5000/api/restaurants', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(newRestaurantData),
-    });
-
-    if (!response.ok) {
-      throw new Error('Falha ao adicionar o restaurante.');
+    // 3. VERIFICA SE O TOKEN EXISTE ANTES DE FAZER O PEDIDO
+    if (!authStore.token) {
+        return Promise.reject("Usuário não autenticado.");
     }
+    try {
+      const response = await fetch('http://localhost:5000/api/restaurants', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // 4. A CORREÇÃO ESTÁ AQUI: ADICIONA O TOKEN AO CABEÇALHO
+          'Authorization': `Bearer ${authStore.token}`
+        },
+        body: JSON.stringify(newRestaurantData),
+      });
 
-    const result = await response.json();
+      if (!response.ok) {
+        // Tenta ler a mensagem de erro do backend para ser mais específico
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Falha ao adicionar o restaurante.');
+      }
 
-    // Cria o objeto completo do restaurante com o ID retornado pela API
-    const restaurantToAdd = {
-      ...newRestaurantData,
-      id: result.id, // Usa o ID que o back-end nos deu!
-      menu: [],
-      isNew: true,
-      mapElements: [ { id: 'bar-1', label: 'Bar', x: 10, y: 10, width: 150, height: 40, fill: '#a8a29e', textColor: '#FFFFFF', rx: 5, rotation: 0, icon_svg: '...' } ],
-      tables: [],
-      floorPatternId: 'floor-marble'
-    };
+      const result = await response.json();
+      
+      // Atualiza a lista de restaurantes para mostrar o novo imediatamente
+      await fetchRestaurantsFromAPI(); 
 
-    // Adiciona o novo restaurante à lista no frontend para atualização imediata da UI
-    restaurants.push(restaurantToAdd);
-    return restaurantToAdd;
+      return result; // Retorna o resultado para a UI
 
-  } catch (error) {
-    console.error("Erro ao adicionar restaurante via API:", error);
-    return null; // Retorna null para indicar que houve um erro
+    } catch (error) {
+      console.error("Erro ao adicionar restaurante via API:", error);
+      return Promise.reject(error.message); // Retorna a mensagem de erro
+    }
   }
-}
 
   async function addDish(newDishData) {
   try {
