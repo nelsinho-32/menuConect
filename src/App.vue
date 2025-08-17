@@ -153,18 +153,16 @@ const loadUserProfileFromLocalStorage = () => {
  */
 const loadInitialUserData = async () => {
   try {
-    // O 'await' garante que a lista de restaurantes (pública) carrega primeiro.
     await restaurantStore.fetchRestaurantsFromAPI();
     
-    // Agora, busca todos os dados específicos do usuário em paralelo.
     await Promise.all([
       userDataStore.fetchAllUserData(),
-      reservationStore.fetchAllUserReservations()
-      // Adicione aqui outras funções de carregamento, se houver.
+      reservationStore.fetchAllUserReservations(),
+      orderStore.fetchHistory() // <-- ADICIONE ESTA LINHA
     ]);
   } catch (error) {
-    console.error("Ocorreu um erro ao carregar os dados iniciais do usuário:", error);
-    showToast("Não foi possível carregar os seus dados. Tente novamente.", "error");
+    console.error("Ocorreu um erro ao carregar os dados iniciais:", error);
+    showToast("Não foi possível carregar os seus dados.", "error");
   }
 };
 
@@ -317,15 +315,16 @@ const handleUpdateMap = async (updatedLayout) => {
 
 const handleBooking = async ({ restaurant, table, date, time, guests }) => {
     try {
-        // CORREÇÃO: Construímos a string de data e hora manualmente,
-        // garantindo que não há conversão de fuso horário.
-        const bookingTimeForAPI = `${date} ${time}:00`; // Formato: "YYYY-MM-DD HH:MM:SS"
+        // CORREÇÃO: A função agora recebe 'date' e 'time' diretamente,
+        // e não dentro de um objeto 'dateTime'.
+        const bookingTimeForAPI = `${date} ${time}:00`;
 
         const reservationData = {
             restaurantId: restaurant.id,
             tableId: table.id,
-             bookingTime: `${dateTime.date} ${dateTime.time}:00`,
-            guests: guests
+            bookingTime: bookingTimeForAPI,
+            guests: guests,
+            status: 'pending'
         };
 
         const success = await reservationStore.createReservation(reservationData);
@@ -336,11 +335,13 @@ const handleBooking = async ({ restaurant, table, date, time, guests }) => {
                 tableId: table.id,
                 newStatus: 'occupied'
             });
+            
+            await restaurantStore.fetchRestaurantsFromAPI(); // Garante que o mapa é atualizado
 
             confirmationModalMessage.value = "A sua reserva foi confirmada com sucesso!";
             isConfirmationModalOpen.value = true;
-
-            // A lógica do WhatsApp precisa da data completa, então criamos o objeto aqui.
+            
+            // A lógica do WhatsApp
             const [year, month, day] = date.split('-').map(Number);
             const [hours, minutes] = time.split(':').map(Number);
             const localDateTime = new Date(year, month - 1, day, hours, minutes);
@@ -348,7 +349,7 @@ const handleBooking = async ({ restaurant, table, date, time, guests }) => {
             setTimeout(() => {
                 sendWhatsAppConfirmation({ restaurant, table, dateTime: localDateTime, guests });
             }, 500);
-
+            
             goToView('myReservations');
         }
     } catch (errorMsg) {

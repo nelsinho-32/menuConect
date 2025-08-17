@@ -283,30 +283,39 @@ def create_reservation(current_user):
     table_id = data.get('tableId')
     booking_time_str = data.get('bookingTime')
     guests = data.get('guests')
-    encontro_id = data.get('encontroId', None)  # Pode ser nulo se não for um encontro
-
+    encontro_id = data.get('encontroId') # Recebe o ID do encontro (pode ser Nulo)
+    status = data.get('status', 'pending') # Recebe o status ('confirmed' ou 'pending')
 
     if not all([restaurant_id, table_id, booking_time_str, guests]):
         return jsonify({"error": "Todos os campos da reserva são obrigatórios."}), 400
-    
+
     booking_time_mysql = booking_time_str
     
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
 
+        # Verifica se a reserva já existe
         check_sql = "SELECT id FROM reservations WHERE restaurant_id = %s AND table_id = %s AND booking_time = %s AND status IN ('confirmed', 'pending')"
         cursor.execute(check_sql, (restaurant_id, table_id, booking_time_mysql))
         if cursor.fetchone():
             return jsonify({"error": "Esta mesa já está reservada para este horário."}), 409
 
-        sql = "INSERT INTO reservations (user_id, restaurant_id, table_id, booking_time, guests, status, encontro_id) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-        val = (current_user['id'], restaurant_id, table_id, booking_time_mysql, guests, 'confirmed', encontro_id)
-        cursor.execute(sql, val)
-        conn.commit()
-        new_id = cursor.lastrowid
+        # --- A CORREÇÃO ESTÁ AQUI ---
+        # A query SQL agora inclui a coluna 'encontro_id'
+        sql = """
+            INSERT INTO reservations 
+            (user_id, restaurant_id, table_id, booking_time, guests, status, encontro_id) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        # A lista de valores agora inclui a variável 'encontro_id'
+        val = (current_user['id'], restaurant_id, table_id, booking_time_mysql, guests, status, encontro_id)
+        # --- FIM DA CORREÇÃO ---
         
-        # ATUALIZA O STATUS DA MESA NO MAPA PARA 'occupied'
+        cursor.execute(sql, val)
+        new_id = cursor.lastrowid
+
+        # Atualiza o status da mesa no mapa para 'occupied'
         cursor.execute("SELECT map_layout FROM restaurants WHERE id = %s", (restaurant_id,))
         result = cursor.fetchone()
         if result and result['map_layout']:
@@ -317,8 +326,8 @@ def create_reservation(current_user):
                     break
             updated_map_json = json.dumps(map_layout)
             cursor.execute("UPDATE restaurants SET map_layout = %s WHERE id = %s", (updated_map_json, restaurant_id))
-            conn.commit()
-        
+
+        conn.commit()
         return jsonify({"message": "Reserva criada com sucesso!", "reservationId": new_id}), 201
 
     except mysql.connector.Error as err:
@@ -912,6 +921,63 @@ def get_table_details(current_user, table_id):
         if 'conn' in locals() and conn.is_connected():
             cursor.close()
             conn.close()
+            
+@app.route('/api/my-orders', methods=['GET'])
+@token_required()
+def get_my_orders(current_user):
+    """Busca o histórico de pedidos para o usuário logado com detalhes completos."""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # 1. Busca todos os pedidos, agora fazendo JOIN com a tabela de reservas
+        orders_sql = """
+            SELECT 
+                o.id, 
+                o.total_price, 
+                o.created_at,
+                r.name as restaurantName,
+                res.encontro_id -- <-- A CORREÇÃO ESTÁ AQUI: Busca o ID do encontro na tabela de reservas
+            FROM orders o
+            JOIN restaurants r ON o.restaurant_id = r.id
+            LEFT JOIN reservations res ON o.reservation_id = res.id -- <-- USA LEFT JOIN para não quebrar pedidos sem reserva
+            WHERE o.user_id = %s
+            ORDER BY o.created_at DESC
+        """
+        cursor.execute(orders_sql, (current_user['id'],))
+        orders = cursor.fetchall()
+
+        # 2. Para cada pedido, busca os seus itens (código existente, sem alterações)
+        for order in orders:
+            items_sql = """
+                SELECT 
+                    oi.quantity, 
+                    oi.price_at_time, 
+                    oi.customization,
+                    d.name as dishName,
+                    d.imageUrl as dishImage
+                FROM order_items oi
+                JOIN dishes d ON oi.dish_id = d.id
+                WHERE oi.order_id = %s
+            """
+            cursor.execute(items_sql, (order['id'],))
+            order_items = cursor.fetchall()
+
+            for item in order_items:
+                if item['customization']:
+                    item['customization'] = json.loads(item['customization']) 
+            
+            order['items'] = order_items
+            
+            if isinstance(order['created_at'], datetime.datetime):
+                order['created_at'] = order['created_at'].isoformat()
+
+        cursor.close()
+        conn.close()
+        return jsonify(orders)
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
 
 # --- Executar a Aplicação ---
 if __name__ == '__main__':

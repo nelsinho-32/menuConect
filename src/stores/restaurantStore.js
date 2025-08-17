@@ -110,6 +110,19 @@ export const useRestaurantStore = defineStore('restaurants', () => {
     }
   }
 
+  /**
+   * Atualiza o status de uma mesa específica localmente para feedback visual imediato.
+   */
+  function updateTableStatus({ restaurantId, tableId, newStatus }) {
+    const restaurant = restaurants.find(r => r.id === restaurantId);
+    if (restaurant && restaurant.tables) {
+      const table = restaurant.tables.find(t => t.id === tableId);
+      if (table) {
+        table.status = newStatus;
+      }
+    }
+  }
+
   return {
     restaurants,
     allDishes,
@@ -118,6 +131,7 @@ export const useRestaurantStore = defineStore('restaurants', () => {
     fetchRestaurantsFromAPI,
     addRestaurant,
     addDish,
-    updateRestaurantMap
+    updateRestaurantMap,
+    updateTableStatus,
   };
 });
