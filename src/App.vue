@@ -38,6 +38,8 @@ import ChatModal from './components/ChatModal.vue';
 import MenuModal from './components/MenuModal.vue';
 import StartSessionModal from './components/StartSessionModal.vue';
 import SessionControlModal from './components/SessionControlModal.vue';
+import AddOrderToSessionModal from './components/AddOrderToSessionModal.vue';
+import FinishSessionModal from './components/FinishSessionModal.vue';
 
 // 1. IMPORTAÇÃO DAS STORES DO PINIA
 import { useRestaurantStore } from './stores/restaurantStore';
@@ -92,6 +94,12 @@ const isStartSessionModalOpen = ref(false);
 const isSessionControlModalOpen = ref(false);
 const tableToManage = ref(null);
 const restaurantForModal = ref(null);
+const sessionToUpdateId = ref(null);
+const isAddOrderToSessionModalOpen = ref(false);
+const sessionForModal = ref(null);
+const itemToCustomize = ref(null);
+const addOrderModalRef = ref(null);
+const isFinishSessionModalOpen = ref(false);
 // Dados mockados que serão substituídos por dados reais da API
 const allUsers = reactive([]);
 const notifications = reactive([]);
@@ -245,6 +253,11 @@ const handleRegister = async (credentials) => {
     }
 };
 
+const onCustomizeSessionItem = (item) => {
+    itemToCustomize.value = item;
+    isCustomizeModalOpen.value = true;
+};
+
 const handleLogin = async (credentials) => {
     try {
         await authStore.login(credentials);
@@ -276,6 +289,34 @@ const handleChangeTableStatus = async (newStatus) => {
         isSessionControlModalOpen.value = false;
     } catch (errorMsg) {
         console.error("Erro ao mudar o status da mesa:", errorMsg);
+    }
+};
+
+const onAddOrderToSession = (payload) => {
+    sessionForModal.value = payload.session;
+    sessionToUpdateId.value = payload.session.id;
+    restaurantForModal.value = payload.restaurant;
+    isAddOrderToSessionModalOpen.value = true;
+    isSessionControlModalOpen.value = false; // Fecha o modal de controlo
+};
+
+const handleConfirmOrderForSession = async (items) => {
+    if (!sessionToUpdateId.value) {
+        showToast("Erro: Sessão da mesa não identificada.", "error");
+        return;
+    }
+    try {
+        await sessionStore.addOrderToSession(sessionToUpdateId.value, items);
+        showToast('Pedido adicionado à mesa com sucesso!');
+
+        // Recarrega os detalhes da sessão para atualizar o extrato
+        await sessionStore.fetchActiveSessionForTable(restaurantForModal.value.id, tableToManage.value.id);
+
+        // Fecha o modal de adicionar pedido e reabre o de controlo
+        isAddOrderToSessionModalOpen.value = false;
+        isSessionControlModalOpen.value = true;
+    } catch (error) {
+        showToast(`Erro ao adicionar pedido: ${error}`, "error");
     }
 };
 
@@ -329,6 +370,13 @@ const handleStartSession = async (sessionData) => {
     }
 };
 
+// Abre o modal de finalização
+const onOpenFinishSessionModal = () => {
+    sessionForModal.value = sessionPayload;
+    isSessionControlModalOpen.value = false; // Fecha o modal de controlo
+    isFinishSessionModalOpen.value = true;  // Abre o modal de finalização
+};
+
 const handleAddRestaurant = async (newRestaurantData) => {
     const added = await restaurantStore.addRestaurant(newRestaurantData);
     if (added) { // Verifica se o restaurante foi adicionado com sucesso
@@ -336,6 +384,35 @@ const handleAddRestaurant = async (newRestaurantData) => {
         closeAddRestaurantModal();
     } else {
         showToast('Erro ao adicionar restaurante. Tente novamente.', 'error');
+    }
+};
+
+const handleOrderForSession = async (dish, quantity = 1) => {
+    if (!sessionToUpdateId.value) {
+        showToast("Erro: Sessão da mesa não identificada.", "error");
+        return;
+    }
+
+    // O 'dish' já tem restaurantId e restaurantName da nossa store
+    const item = {
+        ...dish,
+        id: dish.id,
+        price: dish.price,
+        quantity: quantity
+    };
+
+    try {
+        await sessionStore.addOrderToSession(sessionToUpdateId.value, [item]);
+        showToast(`'${dish.dishName}' adicionado à mesa!`);
+
+        // Recarrega os detalhes da sessão para atualizar o extrato
+        await sessionStore.fetchActiveSessionForTable(restaurantForModal.value.id, tableToManage.value.id);
+
+        // Fecha o modal do menu e reabre o de controlo da sessão
+        closeMenuModal();
+        isSessionControlModalOpen.value = true;
+    } catch (error) {
+        showToast(`Erro ao adicionar pedido: ${error}`, "error");
     }
 };
 
@@ -424,11 +501,17 @@ const handleBooking = async ({ restaurant, table, date, time, guests }) => {
 };
 
 const addToCart = ({ dish, quantity, isPlanned = false, dineOption = 'delivery', customization = null }) => {
-    const cartItemId = `${dish.id}-${Date.now()}`;
-    cart.push({ ...dish, quantity, customization, isPlanned, dineOption, cartItemId });
-    closeCustomizeModal();
-    closeActionModal();
-    showToast(`${quantity}x '${dish.dishName}' adicionado!`);
+    if (sessionToUpdateId.value) {
+        handleOrderForSession(dish, quantity);
+        sessionToUpdateId.value = null;
+        closeActionModal();
+    } else {
+        const cartItemId = `${dish.id}-${Date.now()}`;
+        cart.push({ ...dish, quantity, customization, isPlanned, dineOption, cartItemId });
+        closeCustomizeModal();
+        closeActionModal();
+        showToast(`${quantity}x '${dish.dishName}' adicionado!`);
+    }
 };
 
 const handleConfirmEncontro = async (encontroData) => {
@@ -471,6 +554,20 @@ const handleConfirmEncontro = async (encontroData) => {
         }
     } catch (errorMsg) {
         showToast(`Erro: ${errorMsg}`, 'error');
+    }
+};
+
+// Lida com a confirmação do pagamento
+const handleFinishSession = async (paymentMethod) => {
+    const sessionId = sessionStore.state.activeSession?.session.id;
+    if (!sessionId) return;
+    try {
+        await sessionStore.finishSession(sessionId, paymentMethod);
+        await restaurantStore.fetchRestaurantsFromAPI();
+        isFinishSessionModalOpen.value = false;
+        showToast('Atendimento finalizado com sucesso!');
+    } catch (error) {
+        showToast(error, 'error');
     }
 };
 
@@ -542,21 +639,38 @@ const updateQuantity = ({ cartItemId, quantity }) => {
 };
 
 const handleUpdateCartItem = (customizedData) => {
-    // Se estivermos a editar a partir do planeador de encontros
-    if (dishModalProps.value.plannerData) {
+    // Cenário 1: A atualização veio do modal de comanda do "Painel de Gestão".
+    if (isAddOrderToSessionModalOpen.value) {
+        // O modal de personalização emite o objeto completo e atualizado.
+        // Usamos a ref para chamar a função interna do modal de comanda.
+        addOrderModalRef.value?.updateOrderItem(customizedData);
+        showToast("Item atualizado na comanda!");
+
+        // Cenário 2: A atualização veio do "Planeador de Encontros".
+    } else if (dishModalProps.value.plannerData) {
         const { guest, categoryKey } = dishModalProps.value.plannerData;
-        const customizedItem = {
+
+        // Remonta o objeto do item com a nova personalização
+        const customizedItemForPlanner = {
             ...currentDishForAction.value,
             customization: customizedData.customization
         };
-        encontroStore.setGuestMenu(guest.id, categoryKey, customizedItem);
-    } else { // Se estivermos a editar a partir do carrinho
+
+        // Atualiza o menu do convidado na encontroStore
+        encontroStore.setGuestMenu(guest.id, categoryKey, customizedItemForPlanner);
+        showToast("Seleção do convidado atualizada!");
+
+        // Cenário 3: A atualização veio do carrinho de compras normal do cliente.
+    } else {
         const itemIndex = cart.findIndex(item => item.cartItemId === customizedData.dish.cartItemId);
         if (itemIndex !== -1) {
+            // Atualiza apenas a personalização do item no carrinho
             cart[itemIndex].customization = customizedData.customization;
-            showToast(`Item '${customizedData.dish.dishName}' atualizado.`);
+            showToast(`Item '${customizedData.dish.dishName}' atualizado no carrinho.`);
         }
     }
+
+    // Fecha o modal de personalização em todos os cenários.
     closeCustomizeModal();
 };
 
@@ -861,7 +975,7 @@ const closeCustomizeModal = () => {
                 @add-dish="handleAddDish" />
             <ActionModal v-if="isActionModalOpen" :dish="currentDishForAction" @close-modal="closeActionModal"
                 @add-to-cart="addToCart" @order-now="orderNowFromAction" @open-customize-modal="openCustomizeModal" />
-            <CustomizeDishModal v-if="isCustomizeModalOpen" :dish="currentDishForAction" @close="closeCustomizeModal"
+            <CustomizeDishModal v-if="isCustomizeModalOpen" :dish="itemToCustomize" @close="closeCustomizeModal"
                 @add-to-cart="handleUpdateCartItem" />
             <DineOptionsModal v-if="isDineOptionsModalOpen" :dish="currentDishForAction"
                 @close-modal="closeDineOptionsModal" @dine-in="handleDineInOrTakeout" @takeout="handleDineInOrTakeout"
@@ -884,7 +998,15 @@ const closeCustomizeModal = () => {
                 @close="isStartSessionModalOpen = false" @start-session="handleStartSession" />
             <SessionControlModal v-if="isSessionControlModalOpen" :table="tableToManage"
                 :restaurant="restaurantForModal" @close="isSessionControlModalOpen = false"
-                @change-status="handleChangeTableStatus" />
+                @change-status="handleChangeTableStatus" @add-order="onAddOrderToSession"
+                @finish-session="onOpenFinishSessionModal" />
+            <AddOrderToSessionModal v-if="isAddOrderToSessionModalOpen" ref="addOrderModalRef"
+                :session="sessionForModal" :restaurant="restaurantForModal"
+                @close="isAddOrderToSessionModalOpen = false" @confirm-order="handleConfirmOrderForSession"
+                @customize-item="onCustomizeSessionItem" />
+            <FinishSessionModal v-if="isFinishSessionModalOpen" :session="sessionForModal"
+                :consumption="sessionStore.state.activeSession?.consumption || []"
+                @close="isFinishSessionModalOpen = false" @confirm="handleFinishSession" />
             <div
                 :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
                 {{ toastMessage }}

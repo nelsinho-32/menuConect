@@ -341,29 +341,50 @@ def create_reservation(current_user):
 @app.route('/api/my-reservations', methods=['GET'])
 @token_required()
 def get_my_reservations(current_user):
-    """Busca todas as reservas ativas para o usuário logado."""
-    sql = """
-        SELECT 
-            r.id, 
-            r.restaurant_id AS restaurantId,
-            res.name AS restaurantName,
-            res.imageUrl AS restaurantImage,
-            r.table_id AS tableId,
-            r.booking_time AS bookingTime,
-            r.guests,
-            r.status
-        FROM reservations r
-        JOIN restaurants res ON r.restaurant_id = res.id
-        WHERE r.user_id = %s AND r.status IN ('confirmed', 'pending')
-        ORDER BY r.booking_time ASC
+    """
+    Busca todas as reservas ativas para o usuário logado,
+    depois de limpar automaticamente as que já expiraram.
     """
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
+
+        # --- A CORREÇÃO ESTÁ AQUI ---
+        # 1. Primeiro, atualiza o status de todas as reservas passadas do usuário para 'completed'.
+        # NOW() pega na data e hora atuais do servidor do banco de dados.
+        cleanup_sql = """
+            UPDATE reservations 
+            SET status = 'completed' 
+            WHERE user_id = %s 
+            AND booking_time < NOW() 
+            AND status IN ('confirmed', 'pending')
+        """
+        cursor.execute(cleanup_sql, (current_user['id'],))
+        conn.commit()
+        # --- FIM DA CORREÇÃO ---
+
+        # 2. Agora, busca as reservas que AINDA estão ativas.
+        # A query SELECT não precisa de ser alterada, pois ela já filtra por 'confirmed' e 'pending'.
+        # As reservas que acabámos de marcar como 'completed' serão naturalmente ignoradas.
+        sql = """
+            SELECT 
+                r.id, 
+                r.restaurant_id AS restaurantId,
+                res.name AS restaurantName,
+                res.imageUrl AS restaurantImage,
+                r.table_id AS tableId,
+                r.booking_time AS bookingTime,
+                r.guests,
+                r.status
+            FROM reservations r
+            JOIN restaurants res ON r.restaurant_id = res.id
+            WHERE r.user_id = %s AND r.status IN ('confirmed', 'pending')
+            ORDER BY r.booking_time ASC
+        """
         cursor.execute(sql, (current_user['id'],))
         reservations = cursor.fetchall()
         
-        # Converte o objeto datetime para uma string no formato ISO para ser compatível com JSON
+        # Formata a data para ser facilmente lida pelo JavaScript
         for res in reservations:
             if isinstance(res['bookingTime'], datetime.datetime):
                 res['bookingTime'] = res['bookingTime'].isoformat()
@@ -371,6 +392,7 @@ def get_my_reservations(current_user):
         cursor.close()
         conn.close()
         return jsonify(reservations)
+        
     except mysql.connector.Error as err:
         print(f"Erro do MySQL ao buscar reservas: {err}")
         return jsonify({"error": str(err)}), 500
@@ -1082,6 +1104,106 @@ def get_active_session_details_for_table(current_user, table_id):
             "session": session,
             "consumption": consumption
         })
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+            
+# Cole esta nova função no seu backend/app.py
+
+@app.route('/api/management/sessions/<int:session_id>/orders', methods=['POST'])
+@token_required(roles=['admin', 'empresa'])
+def add_order_to_session(current_user, session_id):
+    """Adiciona um novo pedido (um ou mais itens) a uma sessão de mesa existente."""
+    data = request.get_json()
+    cart_items = data.get('items')
+    
+    if not cart_items:
+        return jsonify({"error": "Nenhum item fornecido para o pedido."}), 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT restaurant_id FROM table_sessions WHERE id = %s", (session_id,))
+        session = cursor.fetchone()
+        if not session:
+            return jsonify({"error": "Sessão não encontrada."}), 404
+        
+        restaurant_id = session['restaurant_id']
+        if current_user['role'] == 'empresa' and current_user.get('restaurant_id') != restaurant_id:
+            return jsonify({"error": "Permissão negada para esta sessão."}), 403
+
+        total_price = sum(Decimal(item.get('price', 0)) * int(item.get('quantity', 0)) for item in cart_items)
+        
+        order_sql = "INSERT INTO orders (user_id, restaurant_id, total_price, session_id, status) VALUES (%s, %s, %s, %s, %s)"
+        cursor.execute(order_sql, (current_user['id'], restaurant_id, total_price, session_id, 'in_progress'))
+        order_id = cursor.lastrowid
+
+        for item in cart_items:
+            # Converte o objeto de personalização para uma string JSON para guardar no banco
+            customization_json = json.dumps(item.get('customization')) if item.get('customization') else None
+            
+            item_sql = "INSERT INTO order_items (order_id, dish_id, quantity, price_at_time, customization) VALUES (%s, %s, %s, %s, %s)"
+            cursor.execute(item_sql, (order_id, item['id'], item['quantity'], Decimal(item['price']), customization_json))
+        
+        conn.commit()
+        return jsonify({"message": "Pedido adicionado à mesa com sucesso!", "orderId": order_id}), 201
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+            
+@app.route('/api/management/sessions/<int:session_id>/finish', methods=['PUT'])
+@token_required(roles=['admin', 'empresa'])
+def finish_table_session(current_user, session_id):
+    """Finaliza uma sessão de mesa, registando o pagamento e liberando a mesa."""
+    data = request.get_json()
+    payment_method = data.get('paymentMethod') # Recebe a forma de pagamento
+
+    if not payment_method:
+        return jsonify({"error": "A forma de pagamento é obrigatória."}), 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # 1. Busca os detalhes da sessão
+        cursor.execute("SELECT restaurant_id, table_id FROM table_sessions WHERE id = %s", (session_id,))
+        session = cursor.fetchone()
+        if not session: return jsonify({"error": "Sessão não encontrada."}), 404
+        
+        restaurant_id = session['restaurant_id']
+        table_id = session['table_id']
+
+        # 2. Valida a permissão
+        if current_user['role'] == 'empresa' and current_user.get('restaurant_id') != restaurant_id:
+            return jsonify({"error": "Permissão negada."}), 403
+
+        # 3. Atualiza a sessão para 'finished' ou 'paid' e regista o pagamento
+        sql_session = "UPDATE table_sessions SET status = 'paid', end_time = %s, payment_method = %s WHERE id = %s"
+        cursor.execute(sql_session, (datetime.datetime.now(), payment_method, session_id))
+
+        # 4. Atualiza o status da mesa no mapa para 'available'
+        cursor.execute("SELECT map_layout FROM restaurants WHERE id = %s", (restaurant_id,))
+        result = cursor.fetchone()
+        if result and result['map_layout']:
+            map_layout = json.loads(result['map_layout'])
+            for table in map_layout.get('tables', []):
+                if str(table.get('id')) == str(table_id):
+                    table['status'] = 'available'
+                    break
+            updated_map_json = json.dumps(map_layout)
+            cursor.execute("UPDATE restaurants SET map_layout = %s WHERE id = %s", (updated_map_json, restaurant_id))
+
+        conn.commit()
+        return jsonify({"message": "Sessão finalizada com sucesso."})
 
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500

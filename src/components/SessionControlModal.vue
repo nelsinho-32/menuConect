@@ -45,6 +45,7 @@
                             </div>
                             <div class="mt-4 flex flex-col gap-2">
                                  <button @click="addOrder" class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">Adicionar Pedido</button>
+                                 <button @click="finishSession" class="w-full bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600">Finalizar Atendimento</button>
                             </div>
                         </div>
                     </div>
@@ -107,8 +108,16 @@ onUnmounted(() => {
     clearInterval(timerInterval);
     sessionStore.clearActiveSession();
 });
-
+const addOrder = () => {
+    // CORREÇÃO: Envia o objeto 'session' completo no payload do evento.
+    emit('addOrder', { 
+        session: session.value, 
+        restaurant: props.restaurant 
+    });
+};
 const closeModal = () => emit('close');
-const addOrder = () => emit('addOrder', session.value?.id);
-const finishSession = () => emit('finishSession', session.value?.id);
+const finishSession = () => {
+    // CORREÇÃO: Emite o objeto 'session' completo no payload do evento.
+    emit('finishSession', session.value);
+};
 </script>

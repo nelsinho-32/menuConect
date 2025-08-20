@@ -59,10 +59,48 @@ export const useSessionStore = defineStore('sessions', () => {
       state.activeSession = null;
   }
 
+  /**
+   * Adiciona um novo pedido (um ou mais itens) a uma sessão ativa.
+   */
+  async function addOrderToSession(sessionId, items) {
+    try {
+      const response = await apiClient(`/management/sessions/${sessionId}/orders`, {
+        method: 'POST',
+        body: JSON.stringify({ items: items })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao adicionar pedido à sessão.');
+      }
+      return data;
+    } catch (err) {
+      console.error("Erro ao adicionar pedido à sessão:", err.message);
+      return Promise.reject(err.message);
+    }
+  }
+
+   async function finishSession(sessionId) {
+    try {
+      const response = await apiClient(`/management/sessions/${sessionId}/finish`, {
+        method: 'PUT',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao finalizar a sessão.');
+      }
+      return true;
+    } catch (err) {
+      console.error("Erro ao finalizar sessão:", err.message);
+      return Promise.reject(err.message);
+    }
+  }
+
   return {
     state,
     startSession,
     fetchActiveSessionForTable,
-    clearActiveSession
+    clearActiveSession,
+    addOrderToSession ,
+    finishSession
   };
 });
