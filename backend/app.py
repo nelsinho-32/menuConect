@@ -978,6 +978,117 @@ def get_my_orders(current_user):
 
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
+    
+# --- ROTAS PARA O 'CAIXA' / GESTÃO DE SESSÃO DE MESA ---
+
+@app.route('/api/management/sessions', methods=['POST'])
+@token_required(roles=['admin', 'empresa'])
+def start_table_session(current_user):
+    """Inicia um novo atendimento (sessão) para uma mesa."""
+    data = request.get_json()
+    table_id = data.get('tableId')
+    guests = data.get('guests')
+    customer_names = data.get('customerNames') # Espera uma lista de nomes
+    
+    restaurant_id = current_user.get('restaurant_id')
+    if current_user['role'] == 'admin':
+        restaurant_id = data.get('restaurantId', restaurant_id) # Admin pode especificar
+
+    if not all([restaurant_id, table_id, guests]):
+        return jsonify({"error": "Dados insuficientes para iniciar a sessão."}), 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        # 1. Inicia a sessão na tabela 'table_sessions'
+        sql_session = """
+            INSERT INTO table_sessions (restaurant_id, table_id, start_time, guests, customer_names)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        start_time = datetime.datetime.now()
+        customer_names_json = json.dumps(customer_names) if customer_names else None
+        cursor.execute(sql_session, (restaurant_id, table_id, start_time, guests, customer_names_json))
+        new_session_id = cursor.lastrowid
+
+        # 2. Atualiza o status da mesa no mapa para 'occupied'
+        cursor.execute("SELECT map_layout FROM restaurants WHERE id = %s", (restaurant_id,))
+        result = cursor.fetchone()
+        if result and result[0]: # result[0] é map_layout
+            map_layout = json.loads(result[0])
+            for table in map_layout.get('tables', []):
+                if str(table.get('id')) == str(table_id):
+                    table['status'] = 'occupied'
+                    break
+            updated_map_json = json.dumps(map_layout)
+            cursor.execute("UPDATE restaurants SET map_layout = %s WHERE id = %s", (updated_map_json, restaurant_id))
+
+        conn.commit()
+        return jsonify({"message": "Sessão iniciada com sucesso!", "sessionId": new_session_id}), 201
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+
+@app.route('/api/management/sessions/table/<string:table_id>', methods=['GET'])
+@token_required(roles=['admin', 'empresa'])
+def get_active_session_details_for_table(current_user, table_id):
+    """Busca os detalhes da sessão ativa para uma mesa específica."""
+    restaurant_id = current_user.get('restaurant_id')
+    if current_user['role'] == 'admin':
+        restaurant_id = request.args.get('restaurantId', restaurant_id)
+    if not restaurant_id:
+        return jsonify({"error": "Nenhum restaurante associado."}), 403
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # 1. Busca a sessão ativa
+        session_sql = """
+            SELECT id, start_time, guests, customer_names 
+            FROM table_sessions 
+            WHERE restaurant_id = %s AND table_id = %s AND status = 'active'
+            ORDER BY start_time DESC LIMIT 1
+        """
+        cursor.execute(session_sql, (restaurant_id, table_id))
+        session = cursor.fetchone()
+
+        if not session:
+            return jsonify({"error": "Nenhuma sessão ativa encontrada para esta mesa."}), 404
+
+        # 2. Busca os pedidos (consumo) associados a esta sessão
+        orders_sql = """
+            SELECT oi.quantity, oi.price_at_time, d.name as dishName
+            FROM order_items oi
+            JOIN dishes d ON oi.dish_id = d.id
+            JOIN orders o ON oi.order_id = o.id
+            WHERE o.session_id = %s
+        """
+        cursor.execute(orders_sql, (session['id'],))
+        consumption = cursor.fetchall()
+        
+        # Formata os dados para o frontend
+        if session.get('start_time') and isinstance(session['start_time'], datetime.datetime):
+            session['start_time'] = session['start_time'].isoformat()
+        if session.get('customer_names'):
+            session['customer_names'] = json.loads(session['customer_names'])
+
+        return jsonify({
+            "session": session,
+            "consumption": consumption
+        })
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
 
 # --- Executar a Aplicação ---
 if __name__ == '__main__':

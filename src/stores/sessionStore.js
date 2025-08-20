@@ -1,0 +1,68 @@
+// src/stores/sessionStore.js
+
+import { reactive } from 'vue';
+import { defineStore } from 'pinia';
+import apiClient from '@/api/client';
+
+export const useSessionStore = defineStore('sessions', () => {
+
+  const state = reactive({
+    activeSession: null,
+    isLoading: false,
+    error: null
+  });
+
+  /**
+   * Inicia uma nova sessão de atendimento para uma mesa.
+   */
+  async function startSession(sessionData) {
+    try {
+      const response = await apiClient('/management/sessions', {
+        method: 'POST',
+        body: JSON.stringify(sessionData)
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao iniciar a sessão.');
+      }
+      return data; // Retorna { sessionId: ... }
+    } catch (err) {
+      console.error("Erro ao iniciar sessão:", err.message);
+      return Promise.reject(err.message);
+    }
+  }
+
+  /**
+   * Busca os detalhes completos de uma sessão ativa para uma mesa.
+   */
+  async function fetchActiveSessionForTable(restaurantId, tableId) {
+    state.isLoading = true;
+    state.error = null;
+    state.activeSession = null;
+    try {
+      const url = `/management/sessions/table/${tableId}?restaurantId=${restaurantId}`;
+      const response = await apiClient(url);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao buscar detalhes da sessão.');
+      }
+      state.activeSession = data;
+    } catch (err) {
+      console.error("Erro ao buscar sessão ativa:", err.message);
+      state.error = err.message;
+    } finally {
+      state.isLoading = false;
+    }
+  }
+  
+  function clearActiveSession() {
+      state.activeSession = null;
+  }
+
+  return {
+    state,
+    startSession,
+    fetchActiveSessionForTable,
+    clearActiveSession
+  };
+});

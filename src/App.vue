@@ -36,6 +36,8 @@ import SelectMenuItemModal from './components/SelectMenuItemModal.vue';
 import TableDetailModal from './components/TableDetailModal.vue';
 import ChatModal from './components/ChatModal.vue';
 import MenuModal from './components/MenuModal.vue';
+import StartSessionModal from './components/StartSessionModal.vue';
+import SessionControlModal from './components/SessionControlModal.vue';
 
 // 1. IMPORTAÇÃO DAS STORES DO PINIA
 import { useRestaurantStore } from './stores/restaurantStore';
@@ -46,6 +48,8 @@ import { useAuthStore } from './stores/authStore';
 import { useUserDataStore } from './stores/userDataStore';
 import { useReservationStore } from './stores/reservationStore';
 import { useOrderStore } from './stores/orderStore'
+import { useManagementStore } from './stores/managementStore';
+import { useSessionStore } from './stores/sessionStore';
 
 // 2. Ativação das stores para usar no componente
 const restaurantStore = useRestaurantStore();
@@ -56,6 +60,8 @@ const authStore = useAuthStore();
 const userDataStore = useUserDataStore();
 const reservationStore = useReservationStore();
 const orderStore = useOrderStore();
+const managementStore = useManagementStore();
+const sessionStore = useSessionStore();
 
 // --- ESTADO REATIVO (EXISTENTE) ---
 const cart = reactive([]);
@@ -82,6 +88,10 @@ const isMenuModalOpen = ref(false);
 const currentRestaurantForMenu = ref(null);
 const isConfirmationModalOpen = ref(false);
 const confirmationModalMessage = ref('');
+const isStartSessionModalOpen = ref(false);
+const isSessionControlModalOpen = ref(false);
+const tableToManage = ref(null);
+const restaurantForModal = ref(null);
 // Dados mockados que serão substituídos por dados reais da API
 const allUsers = reactive([]);
 const notifications = reactive([]);
@@ -152,29 +162,29 @@ const loadUserProfileFromLocalStorage = () => {
  * Esta função só deve ser chamada DEPOIS que o login for confirmado.
  */
 const loadInitialUserData = async () => {
-  try {
-    await restaurantStore.fetchRestaurantsFromAPI();
-    
-    await Promise.all([
-      userDataStore.fetchAllUserData(),
-      reservationStore.fetchAllUserReservations(),
-      orderStore.fetchHistory() // <-- ADICIONE ESTA LINHA
-    ]);
-  } catch (error) {
-    console.error("Ocorreu um erro ao carregar os dados iniciais:", error);
-    showToast("Não foi possível carregar os seus dados.", "error");
-  }
+    try {
+        await restaurantStore.fetchRestaurantsFromAPI();
+
+        await Promise.all([
+            userDataStore.fetchAllUserData(),
+            reservationStore.fetchAllUserReservations(),
+            orderStore.fetchHistory() // <-- ADICIONE ESTA LINHA
+        ]);
+    } catch (error) {
+        console.error("Ocorreu um erro ao carregar os dados iniciais:", error);
+        showToast("Não foi possível carregar os seus dados.", "error");
+    }
 };
 
 // Hook onMounted é executado quando a aplicação arranca
 onMounted(() => {
-  // 1. Tenta fazer o auto-login a partir do localStorage.
-  authStore.tryAutoLogin();
+    // 1. Tenta fazer o auto-login a partir do localStorage.
+    authStore.tryAutoLogin();
 
-  // 2. Se o auto-login funcionou (o token existe), carrega os dados do usuário.
-  if (authStore.isAuthenticated) {
-    loadInitialUserData();
-  }
+    // 2. Se o auto-login funcionou (o token existe), carrega os dados do usuário.
+    if (authStore.isAuthenticated) {
+        loadInitialUserData();
+    }
 });
 
 // Quando a aplicação é montada, carrega tudo a partir das fontes corretas.
@@ -191,20 +201,20 @@ onMounted(() => {
 });
 
 onMounted(async () => {
-  // 1. Primeiro, tenta fazer o auto-login a partir do localStorage.
-  authStore.tryAutoLogin();
+    // 1. Primeiro, tenta fazer o auto-login a partir do localStorage.
+    authStore.tryAutoLogin();
 
-  // 2. SÓ SE o usuário estiver autenticado, busca todos os outros dados.
-  if (authStore.isAuthenticated) {
-    // O 'await' garante que a lista de restaurantes carrega primeiro.
-    await restaurantStore.fetchRestaurantsFromAPI();
-    
-    // Agora que temos os restaurantes, podemos buscar os dados do usuário em paralelo.
-    await Promise.all([
-      userDataStore.fetchAllUserData(),
-      reservationStore.fetchAllUserReservations()
-    ]);
-  }
+    // 2. SÓ SE o usuário estiver autenticado, busca todos os outros dados.
+    if (authStore.isAuthenticated) {
+        // O 'await' garante que a lista de restaurantes carrega primeiro.
+        await restaurantStore.fetchRestaurantsFromAPI();
+
+        // Agora que temos os restaurantes, podemos buscar os dados do usuário em paralelo.
+        await Promise.all([
+            userDataStore.fetchAllUserData(),
+            reservationStore.fetchAllUserReservations()
+        ]);
+    }
 });
 
 
@@ -251,6 +261,24 @@ const handleLogin = async (credentials) => {
     }
 };
 
+const handleChangeTableStatus = async (newStatus) => {
+    if (!tableToManage.value || !restaurantForModal.value) return;
+
+    try {
+        const validStatuses = ["available", "occupied", "reserved", "cleaning"]; // Adicione "cleaning" se for válido
+        if (!validStatuses.includes(newStatus)) {
+            console.error("Status inválido:", newStatus);
+            return;
+        }
+
+        await managementStore.updateTableStatus(tableToManage.value.id, newStatus);
+        await restaurantStore.fetchRestaurantsFromAPI();
+        isSessionControlModalOpen.value = false;
+    } catch (errorMsg) {
+        console.error("Erro ao mudar o status da mesa:", errorMsg);
+    }
+};
+
 const handleLogout = () => {
     authStore.logout();
     showToast('Sessão terminada.');
@@ -262,6 +290,44 @@ const handleViewRoute = (restaurant) => {
 };
 
 const goBack = () => goToView(previousViewState.value || 'home');
+
+const onOpenStartSessionModal = (payload) => {
+    tableToManage.value = payload.table;
+    restaurantForModal.value = payload.restaurant; // <-- Guarda o restaurante
+    isStartSessionModalOpen.value = true;
+};
+
+const onOpenSessionControlModal = (payload) => {
+    tableToManage.value = payload.table;
+    restaurantForModal.value = payload.restaurant; // <-- Guarda o restaurante
+    isSessionControlModalOpen.value = true;
+};
+
+const handleStartSession = async (sessionData) => {
+    // Pega no ID do restaurante que está a ser gerido na managementStore
+    const restaurantId = managementStore.managedRestaurantId;
+
+    if (!restaurantId) {
+        showToast("Não foi possível identificar o restaurante.", "error");
+        return;
+    }
+    try {
+        await sessionStore.startSession({
+            ...sessionData,
+            restaurantId: restaurantId // Usa o ID correto
+        });
+
+        await restaurantStore.fetchRestaurantsFromAPI();
+        isStartSessionModalOpen.value = false;
+
+        // Abre o modal de controlo da sessão que acabámos de iniciar
+        onOpenSessionControlModal({ table: tableToManage.value, restaurant: restaurantForModal.value });
+
+        showToast(`Atendimento iniciado na mesa ${sessionData.tableId}!`);
+    } catch (errorMsg) {
+        showToast(`Erro ao iniciar atendimento: ${errorMsg}`, 'error');
+    }
+};
 
 const handleAddRestaurant = async (newRestaurantData) => {
     const added = await restaurantStore.addRestaurant(newRestaurantData);
@@ -335,12 +401,12 @@ const handleBooking = async ({ restaurant, table, date, time, guests }) => {
                 tableId: table.id,
                 newStatus: 'occupied'
             });
-            
+
             await restaurantStore.fetchRestaurantsFromAPI(); // Garante que o mapa é atualizado
 
             confirmationModalMessage.value = "A sua reserva foi confirmada com sucesso!";
             isConfirmationModalOpen.value = true;
-            
+
             // A lógica do WhatsApp
             const [year, month, day] = date.split('-').map(Number);
             const [hours, minutes] = time.split(':').map(Number);
@@ -349,7 +415,7 @@ const handleBooking = async ({ restaurant, table, date, time, guests }) => {
             setTimeout(() => {
                 sendWhatsAppConfirmation({ restaurant, table, dateTime: localDateTime, guests });
             }, 500);
-            
+
             goToView('myReservations');
         }
     } catch (errorMsg) {
@@ -775,7 +841,9 @@ const closeCustomizeModal = () => {
                     @back-to-main="goToView('home')" />
                 <!-- <TableManagementView v-if="viewState.name === 'tableManagement'" :order-history="orderHistory"
                     @open-table-detail-modal="openTableDetailModal" /> -->
-                <ManagementView v-if="viewState.name === 'dashboard'" />
+                <ManagementView v-if="viewState.name === 'dashboard'"
+                    @open-start-session-modal="onOpenStartSessionModal"
+                    @open-session-control-modal="onOpenSessionControlModal" />
                 <!-- <DashboardView v-if="viewState.name === 'dashboard'" :reservations="userReservations"
                     :order-history="orderHistory" @navigate-to="goToView" /> -->
                 <ReservationSharedView v-if="viewState.name === 'sharedReservation'"
@@ -812,7 +880,11 @@ const closeCustomizeModal = () => {
             <ChatModal />
             <MenuModal v-if="isMenuModalOpen" :restaurant="currentRestaurantForMenu" @close="closeMenuModal"
                 @open-action-modal="openActionModal" />
-
+            <StartSessionModal v-if="isStartSessionModalOpen" :table="tableToManage"
+                @close="isStartSessionModalOpen = false" @start-session="handleStartSession" />
+            <SessionControlModal v-if="isSessionControlModalOpen" :table="tableToManage"
+                :restaurant="restaurantForModal" @close="isSessionControlModalOpen = false"
+                @change-status="handleChangeTableStatus" />
             <div
                 :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
                 {{ toastMessage }}

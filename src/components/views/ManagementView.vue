@@ -10,7 +10,7 @@
             </div>
             <div v-if="authStore.currentUser?.role === 'admin'">
                 <label for="restaurant-selector" class="block text-sm font-medium text-gray-700">Ver dados de:</label>
-                <select id="restaurant-selector" v-model="selectedRestaurantId" @change="onRestaurantChange"
+                <select id="restaurant-selector" :value="managementStore.managedRestaurantId" v-model="selectedRestaurantId" @change="onRestaurantChange"
                     class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
                     <option v-for="restaurant in restaurantStore.restaurants" :key="restaurant.id"
                         :value="restaurant.id">
@@ -69,7 +69,7 @@
                             <rect :x="element.x" :y="element.y" :width="element.width" :height="element.height"
                                 :fill="element.fill" :rx="element.rx || 0" />
                         </g>
-                        <g v-for="table in managedRestaurant.tables" :key="table.id" @click="openStatusModal(table)"
+                        <g v-for="table in managedRestaurant.tables" :key="table.id" @click="handleTableClick(table)"
                             class="cursor-pointer group">
                             <rect :x="table.x" :y="table.y" :width="table.width" :height="table.height"
                                 :rx="table.shape === 'round' ? '50%' : '3'" :fill="getTableColor(table)"
@@ -121,13 +121,22 @@ import { computed, onMounted, ref } from 'vue'; // <-- A CORREÇÃO ESTÁ AQUI
 import { useManagementStore } from '@/stores/managementStore';
 import { useRestaurantStore } from '@/stores/restaurantStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useSessionStore } from '@/stores/sessionStore';
 
 const managementStore = useManagementStore();
 const restaurantStore = useRestaurantStore();
 const authStore = useAuthStore();
+const sessionStore = useSessionStore();
+
+const emit = defineEmits(['openStartSessionModal', 'openSessionControlModal']);
 
 const selectedRestaurantId = ref(null);
 const selectedTable = ref(null);
+const tableToManage = ref(null);
+
+// Modais
+const isStartSessionModalOpen = ref(false);
+const isSessionControlModalOpen = ref(false);
 
 const managedRestaurant = computed(() => {
     const idToFind = selectedRestaurantId.value || authStore.currentUser?.restaurant_id;
@@ -166,14 +175,59 @@ const changeTableStatus = async (newStatus) => {
     }
 };
 
-const onRestaurantChange = () => {
-    managementStore.fetchManagementData(selectedRestaurantId.value);
+const onRestaurantChange = (event) => {
+    const newId = parseInt(event.target.value);
+    managementStore.setManagedRestaurant(newId);
+};
+
+
+const handleTableClick = (table) => {
+    const payload = {
+        table: table,
+        restaurant: managedRestaurant.value 
+    };
+
+    if (table.status === 'available') {
+        emit('openStartSessionModal', payload);
+    } else if (table.status === 'occupied') {
+        emit('openSessionControlModal', payload);
+    } else {
+        alert(`A mesa ${table.id} está a ser limpa.`);
+    }
+};
+
+const handleStartSession = async (sessionData) => {
+    try {
+        await sessionStore.startSession({
+            ...sessionData,
+            restaurantId: managedRestaurant.value.id
+        });
+        await restaurantStore.fetchRestaurantsFromAPI(); // Atualiza o mapa
+        isStartSessionModalOpen.value = false;
+        // Abre automaticamente o modal de controlo da sessão que acabámos de iniciar
+        isSessionControlModalOpen.value = true; 
+    } catch (error) {
+        // showToast(error, 'error');
+        console.error(error);
+    }
 };
 
 onMounted(() => {
-    if (authStore.currentUser?.role === 'admin' && restaurantStore.restaurants.length > 0) {
-        selectedRestaurantId.value = restaurantStore.restaurants[0].id;
+    let initialRestaurantId = authStore.currentUser?.restaurant_id;
+    // Se for admin e não tiver um ID, pega no primeiro restaurante da lista
+    if (authStore.currentUser?.role === 'admin' && !initialRestaurantId && restaurantStore.restaurants.length > 0) {
+        initialRestaurantId = restaurantStore.restaurants[0].id;
     }
-    managementStore.fetchManagementData(selectedRestaurantId.value || authStore.currentUser?.restaurant_id);
+    if (initialRestaurantId) {
+        managementStore.setManagedRestaurant(initialRestaurantId);
+    }
 });
+
+
+// onMounted(() => {
+//     if (authStore.currentUser?.role === 'admin' && restaurantStore.restaurants.length > 0) {
+//         selectedRestaurantId.value = restaurantStore.restaurants[0].id;
+//     }
+//     managementStore.fetchManagementData(selectedRestaurantId.value || authStore.currentUser?.restaurant_id);
+// });
 </script>

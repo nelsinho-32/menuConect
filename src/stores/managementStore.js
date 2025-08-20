@@ -1,31 +1,44 @@
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue'; // <-- CORREÇÃO: Faltava importar 'ref'
 import { defineStore } from 'pinia';
 import { useAuthStore } from './authStore';
-import { useRestaurantStore } from './restaurantStore'; // <-- 1. IMPORTAR A STORE DE RESTAURANTES
+import { useRestaurantStore } from './restaurantStore';
+import apiClient from '@/api/client'; // <-- CORREÇÃO: Usar o apiClient para autenticação
 
 export const useManagementStore = defineStore('management', () => {
   const authStore = useAuthStore();
-  const restaurantStore = useRestaurantStore(); // <-- 2. INICIALIZAR A STORE
+  const restaurantStore = useRestaurantStore();
 
   const state = reactive({
     reservations: [],
     waitlist: [],
-    isLoading: false,
     financials: { dailySales: 0, mostPopularDish: "N/A" },
     selectedTableDetails: null,
+    isLoading: false,
     error: null,
   });
 
-  // --- NOVA FUNÇÃO PARA BUSCAR DETALHES DA MESA ---
-  async function fetchTableDetails(restaurantId, tableId) {
-    if (!authStore.token) return;
+  // Guarda o ID do restaurante que está a ser visto no painel
+  const managedRestaurantId = ref(null);
+
+  /**
+   * Define qual restaurante está a ser gerido e busca os seus dados.
+   */
+  async function setManagedRestaurant(restaurantId) {
+    managedRestaurantId.value = restaurantId;
+    await fetchManagementData();
+  }
+
+  /**
+   * Busca os detalhes completos de uma sessão ativa ou de uma reserva para uma mesa.
+   */
+  async function fetchTableDetails(tableId) {
+    if (!managedRestaurantId.value) return;
     state.isLoading = true;
     state.selectedTableDetails = null;
     try {
-      const url = `http://localhost:5000/api/management/tables/${tableId}/details?restaurant_id=${restaurantId}`;
-      const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${authStore.token}` }
-      });
+      // CORREÇÃO: A rota estava errada, agora busca os detalhes da sessão
+      const url = `/management/sessions/table/${tableId}?restaurantId=${managedRestaurantId.value}`;
+      const response = await apiClient(url);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       state.selectedTableDetails = data;
@@ -37,30 +50,28 @@ export const useManagementStore = defineStore('management', () => {
     }
   }
 
-  async function fetchManagementData(restaurantId = null) {
-    if (!authStore.isAuthenticated) return;
+  /**
+   * Busca todos os dados de gestão para o restaurante selecionado.
+   */
+  async function fetchManagementData() {
+    // Usa o ID guardado na store, que foi definido por setManagedRestaurant
+    const idToFetch = managedRestaurantId.value;
+    if (!idToFetch) {
+        // Se nenhum restaurante foi selecionado ainda, não faz nada.
+        return;
+    }
+
     state.isLoading = true;
     state.error = null;
     try {
-      let idToFetch = restaurantId || authStore.currentUser?.restaurant_id;
-      if (authStore.currentUser?.role === 'admin' && !idToFetch) {
-        if (restaurantStore.restaurants.length > 0) {
-          idToFetch = restaurantStore.restaurants[0].id;
-        } else {
-          state.isLoading = false;
-          return;
-        }
-      }
-      if (!idToFetch) throw new Error("Nenhum restaurante encontrado para gerir.");
-
-      const reservationsUrl = `http://localhost:5000/api/management/reservations?restaurant_id=${idToFetch}`;
-      const waitlistUrl = `http://localhost:5000/api/management/waitlist?restaurant_id=${idToFetch}`;
-      const financialsUrl = `http://localhost:5000/api/management/financials?restaurant_id=${idToFetch}`; // <-- NOVA URL
+      const reservationsUrl = `/management/reservations?restaurant_id=${idToFetch}`;
+      const waitlistUrl = `/management/waitlist?restaurant_id=${idToFetch}`;
+      const financialsUrl = `/management/financials?restaurant_id=${idToFetch}`;
 
       const [resReservations, resWaitlist, resFinancials] = await Promise.all([
-        fetch(reservationsUrl, { headers: { 'Authorization': `Bearer ${authStore.token}` } }),
-        fetch(waitlistUrl, { headers: { 'Authorization': `Bearer ${authStore.token}` } }),
-        fetch(financialsUrl, { headers: { 'Authorization': `Bearer ${authStore.token}` } }) // <-- NOVA CHAMADA
+        apiClient(reservationsUrl),
+        apiClient(waitlistUrl),
+        apiClient(financialsUrl)
       ]);
 
       if (!resReservations.ok || !resWaitlist.ok || !resFinancials.ok) {
@@ -69,7 +80,7 @@ export const useManagementStore = defineStore('management', () => {
 
       state.reservations = await resReservations.json();
       state.waitlist = await resWaitlist.json();
-      state.financials = await resFinancials.json(); // <-- SALVA OS DADOS FINANCEIROS
+      state.financials = await resFinancials.json();
 
     } catch (err) {
       state.error = err.message;
@@ -78,35 +89,45 @@ export const useManagementStore = defineStore('management', () => {
     }
   }
 
-    async function updateTableStatus(restaurantId, tableId, newStatus) { // <-- Aceita restaurantId
-    if (!authStore.token) return Promise.reject("Não autenticado");
+  /**
+   * Atualiza o status de uma mesa.
+   */
+  async function updateTableStatus(tableId, newStatus) {
+    const validStatuses = ["available", "occupied", "reserved"]; // Valores aceitos pela API
+    if (!validStatuses.includes(newStatus)) {
+        console.error("Status inválido:", newStatus);
+        return Promise.reject("Status inválido.");
+    }
+
+    const restaurantId = managedRestaurantId.value;
+    if (!restaurantId) {
+        return Promise.reject("Nenhum restaurante selecionado para gerir.");
+    }
+
     try {
-      const response = await fetch(`http://localhost:5000/api/management/tables/${tableId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authStore.token}`
-        },
-        // CORREÇÃO: Envia o restaurantId junto com o status
-        body: JSON.stringify({ 
-            status: newStatus,
-            restaurantId: restaurantId 
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Falha ao atualizar status da mesa.');
-      
-      return true;
+        const response = await apiClient(`/management/tables/${tableId}/status`, {
+            method: 'PUT',
+            body: JSON.stringify({ 
+                status: newStatus,
+                restaurantId: restaurantId
+            })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Falha ao atualizar status da mesa.');
+        
+        return true;
     } catch (error) {
-      console.error("Erro ao atualizar status da mesa:", error);
-      return Promise.reject(error.message);
+        console.error("Erro ao atualizar status da mesa:", error);
+        return Promise.reject(error.message);
     }
   }
 
   return {
     state,
+    managedRestaurantId,
+    setManagedRestaurant,
     fetchManagementData,
     updateTableStatus,
     fetchTableDetails
-  }
+  };
 });
