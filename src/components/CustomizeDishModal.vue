@@ -1,5 +1,5 @@
 <template>
-    <div @click.self="$emit('close')" class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+    <div @click.self="$emit('close')" class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[60]">
         <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl">
             <div class="p-6 border-b text-center">
                 <h3 class="text-2xl font-bold text-gray-800">Personalize seu Pedido</h3>

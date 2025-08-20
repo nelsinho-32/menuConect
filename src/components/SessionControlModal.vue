@@ -31,21 +31,29 @@
                                 </div>
                             </div>
                         </div>
+                        
                         <div>
                             <h4 class="font-bold text-gray-700 mb-2">Extrato de Consumo</h4>
-                            <div class="bg-gray-50 p-4 rounded-lg space-y-2 max-h-64 overflow-y-auto">
+                            <div class="bg-gray-50 p-4 rounded-lg space-y-3 max-h-64 overflow-y-auto">
                                <p v-if="consumption.length === 0" class="text-sm text-gray-400">Nenhum item consumido ainda.</p>
-                               <div v-for="(item, index) in consumption" :key="index" class="text-sm flex justify-between border-b pb-1">
-                                   <span>{{ item.quantity }}x {{ item.dishName }}</span>
-                                   <span class="font-semibold">R$ {{ (item.price_at_time * item.quantity).toFixed(2).replace(',', '.') }}</span>
+                               
+                               <div v-for="(item, index) in consumption" :key="index" class="text-sm border-b pb-2 last:border-b-0">
+                                   <div class="flex justify-between">
+                                       <span class="font-semibold">{{ item.quantity }}x {{ item.dishName }}</span>
+                                       <span class="font-semibold">R$ {{ (item.price_at_time * item.quantity).toFixed(2).replace('.', ',') }}</span>
+                                   </div>
+                                   <div v-if="item.customization" class="text-xs mt-1 pl-1 border-l-2 border-indigo-200">
+                                        <p v-if="item.customization.removedIngredients?.length" class="text-red-500">Sem: {{ item.customization.removedIngredients.join(', ') }}</p>
+                                        <p v-if="item.customization.notes" class="text-gray-500">Nota: {{ item.customization.notes }}</p>
+                                    </div>
                                </div>
                             </div>
                              <div class="text-right font-bold text-lg mt-4 pt-2 border-t">
                                 Total: R$ {{ totalConsumption.toFixed(2).replace('.', ',') }}
                             </div>
                             <div class="mt-4 flex flex-col gap-2">
-                                 <button @click="addOrder" class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">Adicionar Pedido</button>
-                                 <button @click="finishSession" class="w-full bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600">Finalizar Atendimento</button>
+                                 <button @click="addOrder" class="w-full bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">Adicionar Pedido</button>
+                                 <button @click="finishSession" class="w-full bg-cyan-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600">Finalizar Atendimento</button>
                             </div>
                         </div>
                     </div>
@@ -110,14 +118,18 @@ onUnmounted(() => {
 });
 const addOrder = () => {
     // CORREÇÃO: Envia o objeto 'session' completo no payload do evento.
-    emit('addOrder', { 
-        session: session.value, 
-        restaurant: props.restaurant 
+    emit('addOrder', {
+        session: session.value,
+        restaurant: props.restaurant
     });
 };
 const closeModal = () => emit('close');
 const finishSession = () => {
-    // CORREÇÃO: Emite o objeto 'session' completo no payload do evento.
-    emit('finishSession', session.value);
+    // CORREÇÃO: Emite o objeto 'session' completo, que já temos
+    // na nossa propriedade computada 'session'.
+    emit('finishSession', {
+        session: session.value,
+        consumption: consumption.value
+    });
 };
 </script>

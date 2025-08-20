@@ -100,6 +100,7 @@ const sessionForModal = ref(null);
 const itemToCustomize = ref(null);
 const addOrderModalRef = ref(null);
 const isFinishSessionModalOpen = ref(false);
+const consumptionForModal = ref([]);
 // Dados mockados que serão substituídos por dados reais da API
 const allUsers = reactive([]);
 const notifications = reactive([]);
@@ -371,10 +372,13 @@ const handleStartSession = async (sessionData) => {
 };
 
 // Abre o modal de finalização
-const onOpenFinishSessionModal = () => {
-    sessionForModal.value = sessionPayload;
-    isSessionControlModalOpen.value = false; // Fecha o modal de controlo
-    isFinishSessionModalOpen.value = true;  // Abre o modal de finalização
+const onOpenFinishSessionModal = (payload) => {
+    // CORREÇÃO: A função agora desempacota o 'payload' completo.
+    sessionForModal.value = payload.session;
+    consumptionForModal.value = payload.consumption; // <-- Guarda a lista de consumo
+
+    isSessionControlModalOpen.value = false;
+    isFinishSessionModalOpen.value = true;
 };
 
 const handleAddRestaurant = async (newRestaurantData) => {
@@ -559,15 +563,20 @@ const handleConfirmEncontro = async (encontroData) => {
 
 // Lida com a confirmação do pagamento
 const handleFinishSession = async (paymentMethod) => {
-    const sessionId = sessionStore.state.activeSession?.session.id;
-    if (!sessionId) return;
+    const sessionId = sessionForModal.value?.id;
+    if (!sessionId) {
+        showToast("Não foi possível identificar a sessão para finalizar.", "error");
+        return;
+    }
+
     try {
         await sessionStore.finishSession(sessionId, paymentMethod);
-        await restaurantStore.fetchRestaurantsFromAPI();
         isFinishSessionModalOpen.value = false;
-        showToast('Atendimento finalizado com sucesso!');
-    } catch (error) {
-        showToast(error, 'error');
+        await restaurantStore.fetchRestaurantsFromAPI();
+        await managementStore.fetchManagementData();     
+        showToast(`Atendimento da mesa ${tableToManage.value.id} finalizado com sucesso!`);
+    } catch (errorMsg) {
+        showToast(`Erro ao finalizar atendimento: ${errorMsg}`, 'error');
     }
 };
 
@@ -641,36 +650,31 @@ const updateQuantity = ({ cartItemId, quantity }) => {
 const handleUpdateCartItem = (customizedData) => {
     // Cenário 1: A atualização veio do modal de comanda do "Painel de Gestão".
     if (isAddOrderToSessionModalOpen.value) {
-        // O modal de personalização emite o objeto completo e atualizado.
-        // Usamos a ref para chamar a função interna do modal de comanda.
-        addOrderModalRef.value?.updateOrderItem(customizedData);
-        showToast("Item atualizado na comanda!");
-
-        // Cenário 2: A atualização veio do "Planeador de Encontros".
-    } else if (dishModalProps.value.plannerData) {
-        const { guest, categoryKey } = dishModalProps.value.plannerData;
-
-        // Remonta o objeto do item com a nova personalização
-        const customizedItemForPlanner = {
-            ...currentDishForAction.value,
+        // Reconstrói o objeto completo do item com a nova personalização.
+        const updatedItem = {
+            ...itemToCustomize.value, // Pega no item original que foi guardado
             customization: customizedData.customization
         };
+        // Chama a função interna do modal de comanda para atualizar a sua lista.
+        addOrderModalRef.value?.updateOrderItem(updatedItem);
+        showToast("Item atualizado na comanda!");
 
-        // Atualiza o menu do convidado na encontroStore
+    } 
+    // Cenário 2: A atualização veio do "Planeador de Encontros".
+    else if (dishModalProps.value.plannerData) {
+        const { guest, categoryKey } = dishModalProps.value.plannerData;
+        const customizedItemForPlanner = { ...currentDishForAction.value, customization: customizedData.customization };
         encontroStore.setGuestMenu(guest.id, categoryKey, customizedItemForPlanner);
         showToast("Seleção do convidado atualizada!");
 
-        // Cenário 3: A atualização veio do carrinho de compras normal do cliente.
+    // Cenário 3: A atualização veio do carrinho de compras normal do cliente.
     } else {
         const itemIndex = cart.findIndex(item => item.cartItemId === customizedData.dish.cartItemId);
         if (itemIndex !== -1) {
-            // Atualiza apenas a personalização do item no carrinho
             cart[itemIndex].customization = customizedData.customization;
             showToast(`Item '${customizedData.dish.dishName}' atualizado no carrinho.`);
         }
     }
-
-    // Fecha o modal de personalização em todos os cenários.
     closeCustomizeModal();
 };
 
@@ -1005,8 +1009,8 @@ const closeCustomizeModal = () => {
                 @close="isAddOrderToSessionModalOpen = false" @confirm-order="handleConfirmOrderForSession"
                 @customize-item="onCustomizeSessionItem" />
             <FinishSessionModal v-if="isFinishSessionModalOpen" :session="sessionForModal"
-                :consumption="sessionStore.state.activeSession?.consumption || []"
-                @close="isFinishSessionModalOpen = false" @confirm="handleFinishSession" />
+                :consumption="consumptionForModal" @close="isFinishSessionModalOpen = false"
+                @confirm="handleFinishSession" />
             <div
                 :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
                 {{ toastMessage }}

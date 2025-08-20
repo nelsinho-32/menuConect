@@ -79,10 +79,11 @@ export const useSessionStore = defineStore('sessions', () => {
     }
   }
 
-   async function finishSession(sessionId) {
+   async function finishSession(sessionId, paymentMethod) {
     try {
       const response = await apiClient(`/management/sessions/${sessionId}/finish`, {
         method: 'PUT',
+        body: JSON.stringify({ paymentMethod: paymentMethod }) 
       });
       const data = await response.json();
       if (!response.ok) {

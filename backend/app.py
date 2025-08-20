@@ -1071,21 +1071,20 @@ def get_active_session_details_for_table(current_user, table_id):
         cursor = conn.cursor(dictionary=True)
 
         # 1. Busca a sessão ativa
-        session_sql = """
-            SELECT id, start_time, guests, customer_names 
-            FROM table_sessions 
-            WHERE restaurant_id = %s AND table_id = %s AND status = 'active'
-            ORDER BY start_time DESC LIMIT 1
-        """
+        session_sql = "SELECT id, start_time, guests, customer_names FROM table_sessions WHERE restaurant_id = %s AND table_id = %s AND status = 'active' ORDER BY start_time DESC LIMIT 1"
         cursor.execute(session_sql, (restaurant_id, table_id))
         session = cursor.fetchone()
 
         if not session:
             return jsonify({"error": "Nenhuma sessão ativa encontrada para esta mesa."}), 404
 
-        # 2. Busca os pedidos (consumo) associados a esta sessão
+        # 2. Busca os pedidos (consumo) associados a esta sessão, AGORA COM A PERSONALIZAÇÃO
         orders_sql = """
-            SELECT oi.quantity, oi.price_at_time, d.name as dishName
+            SELECT 
+                oi.quantity, 
+                oi.price_at_time, 
+                oi.customization, -- <-- ADICIONADO
+                d.name as dishName
             FROM order_items oi
             JOIN dishes d ON oi.dish_id = d.id
             JOIN orders o ON oi.order_id = o.id
@@ -1094,11 +1093,14 @@ def get_active_session_details_for_table(current_user, table_id):
         cursor.execute(orders_sql, (session['id'],))
         consumption = cursor.fetchall()
         
-        # Formata os dados para o frontend
-        if session.get('start_time') and isinstance(session['start_time'], datetime.datetime):
-            session['start_time'] = session['start_time'].isoformat()
-        if session.get('customer_names'):
-            session['customer_names'] = json.loads(session['customer_names'])
+        # Processa os dados para o frontend
+        if session.get('start_time'): session['start_time'] = session['start_time'].isoformat()
+        if session.get('customer_names'): session['customer_names'] = json.loads(session['customer_names'])
+        
+        # Processa a personalização de cada item
+        for item in consumption:
+            if item.get('customization'):
+                item['customization'] = json.loads(item['customization'])
 
         return jsonify({
             "session": session,
@@ -1143,12 +1145,16 @@ def add_order_to_session(current_user, session_id):
         cursor.execute(order_sql, (current_user['id'], restaurant_id, total_price, session_id, 'in_progress'))
         order_id = cursor.lastrowid
 
+        # --- A CORREÇÃO ESTÁ AQUI ---
         for item in cart_items:
             # Converte o objeto de personalização para uma string JSON para guardar no banco
             customization_json = json.dumps(item.get('customization')) if item.get('customization') else None
             
+            # A query SQL agora inclui a coluna 'customization'
             item_sql = "INSERT INTO order_items (order_id, dish_id, quantity, price_at_time, customization) VALUES (%s, %s, %s, %s, %s)"
+            # A lista de valores agora inclui a variável 'customization_json'
             cursor.execute(item_sql, (order_id, item['id'], item['quantity'], Decimal(item['price']), customization_json))
+        # --- FIM DA CORREÇÃO ---
         
         conn.commit()
         return jsonify({"message": "Pedido adicionado à mesa com sucesso!", "orderId": order_id}), 201
