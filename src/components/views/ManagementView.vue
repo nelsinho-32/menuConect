@@ -10,7 +10,8 @@
             </div>
             <div v-if="authStore.currentUser?.role === 'admin'">
                 <label for="restaurant-selector" class="block text-sm font-medium text-gray-700">Ver dados de:</label>
-                <select id="restaurant-selector" :value="managementStore.managedRestaurantId" v-model="selectedRestaurantId" @change="onRestaurantChange"
+                <select id="restaurant-selector" :value="managementStore.managedRestaurantId"
+                    @change="onRestaurantChange"
                     class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
                     <option v-for="restaurant in restaurantStore.restaurants" :key="restaurant.id"
                         :value="restaurant.id">
@@ -139,8 +140,8 @@ const isStartSessionModalOpen = ref(false);
 const isSessionControlModalOpen = ref(false);
 
 const managedRestaurant = computed(() => {
-    const idToFind = selectedRestaurantId.value || authStore.currentUser?.restaurant_id;
-    if (!idToFind) return restaurantStore.restaurants.length > 0 ? restaurantStore.restaurants[0] : null;
+    const idToFind = managementStore.managedRestaurantId;
+    if (!idToFind) return null;
     return restaurantStore.restaurants.find(r => r.id === idToFind);
 });
 
@@ -177,14 +178,17 @@ const changeTableStatus = async (newStatus) => {
 
 const onRestaurantChange = (event) => {
     const newId = parseInt(event.target.value);
-    managementStore.setManagedRestaurant(newId);
+    if (newId) {
+        // Chama a ação da store, que irá buscar os novos dados.
+        managementStore.setManagedRestaurant(newId);
+    }
 };
 
 
 const handleTableClick = (table) => {
     const payload = {
         table: table,
-        restaurant: managedRestaurant.value 
+        restaurant: managedRestaurant.value
     };
 
     if (table.status === 'available') {
@@ -205,7 +209,7 @@ const handleStartSession = async (sessionData) => {
         await restaurantStore.fetchRestaurantsFromAPI(); // Atualiza o mapa
         isStartSessionModalOpen.value = false;
         // Abre automaticamente o modal de controlo da sessão que acabámos de iniciar
-        isSessionControlModalOpen.value = true; 
+        isSessionControlModalOpen.value = true;
     } catch (error) {
         // showToast(error, 'error');
         console.error(error);
@@ -214,14 +218,17 @@ const handleStartSession = async (sessionData) => {
 
 onMounted(() => {
     let initialRestaurantId = authStore.currentUser?.restaurant_id;
-    // Se for admin e não tiver um ID, pega no primeiro restaurante da lista
-    if (authStore.currentUser?.role === 'admin' && !initialRestaurantId && restaurantStore.restaurants.length > 0) {
+
+    // Se o utilizador é um admin, define o restaurante inicial como o primeiro da lista.
+    if (authStore.currentUser?.role === 'admin' && restaurantStore.restaurants.length > 0) {
         initialRestaurantId = restaurantStore.restaurants[0].id;
     }
+    // Se tivermos um ID de restaurante válido, manda a store carregar os seus dados.
     if (initialRestaurantId) {
         managementStore.setManagedRestaurant(initialRestaurantId);
     }
 });
+
 
 
 // onMounted(() => {

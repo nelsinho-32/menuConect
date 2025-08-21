@@ -504,14 +504,14 @@ const handleBooking = async ({ restaurant, table, date, time, guests }) => {
     }
 };
 
-const addToCart = ({ dish, quantity, isPlanned = false, dineOption = 'delivery', customization = null }) => {
+const addToCart = ({ dish, quantity, isPlanned = false, dineOption = 'delivery', customization = null, encontroPayload = null }) => {
     if (sessionToUpdateId.value) {
         handleOrderForSession(dish, quantity);
         sessionToUpdateId.value = null;
         closeActionModal();
     } else {
         const cartItemId = `${dish.id}-${Date.now()}`;
-        cart.push({ ...dish, quantity, customization, isPlanned, dineOption, cartItemId });
+        cart.push({ ...dish, quantity, customization, isPlanned, dineOption, cartItemId, encontroPayload });
         closeCustomizeModal();
         closeActionModal();
         showToast(`${quantity}x '${dish.dishName}' adicionado!`);
@@ -526,19 +526,24 @@ const handleConfirmEncontro = async (encontroData) => {
             encontroData.guests.forEach(guest => {
                 Object.values(guest.menu).forEach(dishObject => {
                     if (dishObject && dishObject.id) {
+                        const { customization, ...restOfDish } = dishObject;
+
                         addToCart({
-                            dish: { ...dishObject, restaurantId: encontroData.restaurantId, restaurantName: encontroData.restaurantName },
-                            quantity: 1, isPlanned: true, dineOption: 'dine-in',
-                            // ANEXA OS DADOS NECESSÁRIOS PARA DEPOIS DO PAGAMENTO
+                            dish: { ...restOfDish, restaurantId: encontroData.restaurantId, restaurantName: encontroData.restaurantName },
+                            quantity: 1,
+                            isPlanned: true,
+                            dineOption: 'dine-in',
+                            customization: customization || null,
                             encontroPayload: {
                                 restaurantId: encontroData.restaurantId,
                                 tableId: encontroData.selectedTable.id,
                                 dateTime: encontroData.dateTime,
                                 guests: encontroData.guests.length,
                                 encontroId: savedEncontro.encontroId,
-                                menu: encontroData.guests.map(g => g.menu) // Passa o menu para o WhatsApp
+                                menu: encontroData.guests.map(g => g.menu)
                             }
                         });
+                        // --- FIM DA CORREÇÃO ---
                     }
                 });
             });
@@ -553,7 +558,7 @@ const handleConfirmEncontro = async (encontroData) => {
                 status: 'confirmed',
                 encontroId: savedEncontro.encontroId
             });
-            await restaurantStore.fetchRestaurantsFromAPI(); // <-- ATUALIZA O MAPA
+            await restaurantStore.fetchRestaurantsFromAPI();
             showToast(`Encontro planeado com sucesso e mesa reservada!`);
         }
     } catch (errorMsg) {
@@ -573,7 +578,7 @@ const handleFinishSession = async (paymentMethod) => {
         await sessionStore.finishSession(sessionId, paymentMethod);
         isFinishSessionModalOpen.value = false;
         await restaurantStore.fetchRestaurantsFromAPI();
-        await managementStore.fetchManagementData();     
+        await managementStore.fetchManagementData();
         showToast(`Atendimento da mesa ${tableToManage.value.id} finalizado com sucesso!`);
     } catch (errorMsg) {
         showToast(`Erro ao finalizar atendimento: ${errorMsg}`, 'error');
@@ -648,31 +653,38 @@ const updateQuantity = ({ cartItemId, quantity }) => {
 };
 
 const handleUpdateCartItem = (customizedData) => {
-    // Cenário 1: A atualização veio do modal de comanda do "Painel de Gestão".
+    // Cenário 1: Atualização vinda do painel de gestão.
     if (isAddOrderToSessionModalOpen.value) {
-        // Reconstrói o objeto completo do item com a nova personalização.
         const updatedItem = {
-            ...itemToCustomize.value, // Pega no item original que foi guardado
+            ...itemToCustomize.value,
             customization: customizedData.customization
         };
-        // Chama a função interna do modal de comanda para atualizar a sua lista.
         addOrderModalRef.value?.updateOrderItem(updatedItem);
         showToast("Item atualizado na comanda!");
-
     } 
-    // Cenário 2: A atualização veio do "Planeador de Encontros".
+    // Cenário 2: Atualização vinda do Planeador de Encontros.
     else if (dishModalProps.value.plannerData) {
         const { guest, categoryKey } = dishModalProps.value.plannerData;
-        const customizedItemForPlanner = { ...currentDishForAction.value, customization: customizedData.customization };
+        const customizedItemForPlanner = { ...itemToCustomize.value, customization: customizedData.customization };
         encontroStore.setGuestMenu(guest.id, categoryKey, customizedItemForPlanner);
         showToast("Seleção do convidado atualizada!");
-
-    // Cenário 3: A atualização veio do carrinho de compras normal do cliente.
-    } else {
+    }
+    // Cenário 3: Atualização/Adição ao carrinho normal do cliente.
+    else {
         const itemIndex = cart.findIndex(item => item.cartItemId === customizedData.dish.cartItemId);
         if (itemIndex !== -1) {
+            // Se o item já existe no carrinho, atualiza a sua personalização.
             cart[itemIndex].customization = customizedData.customization;
             showToast(`Item '${customizedData.dish.dishName}' atualizado no carrinho.`);
+        } else {
+            // Se o item não existe no carrinho (vindo de um card), adiciona-o com a personalização.
+            // CORREÇÃO: Passa os dados corretamente para a função addToCart.
+            addToCart({
+                dish: customizedData.dish,
+                quantity: 1, // A quantidade é sempre 1 ao adicionar pela primeira vez
+                customization: customizedData.customization,
+                dineOption: 'delivery'
+            });
         }
     }
     closeCustomizeModal();
@@ -734,26 +746,42 @@ const handlePaymentSuccess = async () => {
     try {
         let reservationIdParaPedido = null;
         if (encontroItem) {
-            // 1. Se for um encontro, PRIMEIRO cria a reserva
-            const reservationResult = await reservationStore.createReservation({
-                ...encontroItem.encontroPayload,
+            // --- INÍCIO DA CORREÇÃO 1: Mapeamento de 'dateTime' para 'bookingTime' ---
+            const payload = encontroItem.encontroPayload;
+            const reservationData = {
+                restaurantId: payload.restaurantId,
+                tableId: payload.tableId,
+                bookingTime: payload.dateTime, // Remapeia o nome do campo
+                guests: payload.guests,
+                encontroId: payload.encontroId,
                 status: 'confirmed'
-            });
-            reservationIdParaPedido = reservationResult.reservationId;
+            };
 
-            // 2. Envia a notificação do WhatsApp com todos os detalhes
-            // (Esta função precisará ser adaptada para formatar o menu)
-            // sendWhatsAppConfirmation({ ...encontroItem.encontroPayload, menu: encontroItem.encontroPayload.menu });
+            const reservationResult = await reservationStore.createReservation(reservationData);
+            reservationIdParaPedido = reservationResult.reservationId;
+            // --- FIM DA CORREÇÃO 1 ---
+
+            const restaurant = restaurantStore.restaurants.find(r => r.id === payload.restaurantId);
+            const table = restaurant?.tables.find(t => t.id.toString() === payload.tableId.toString());
+
+            if (restaurant && table) {
+                // Passa o menu para a função de notificação
+                sendWhatsAppConfirmation({
+                    restaurant,
+                    table,
+                    dateTime: new Date(payload.dateTime),
+                    guests: payload.guests,
+                    menu: payload.menu
+                });
+            }
         }
 
-        // 3. DEPOIS, cria o pedido, agora com o ID da reserva
         await orderStore.createOrder(cart, finalTotal, reservationIdParaPedido);
 
-        // 4. ATUALIZA TUDO
         cart.length = 0;
         closePaymentModal();
         closePixModal();
-        await restaurantStore.fetchRestaurantsFromAPI(); // <-- ESSENCIAL para atualizar o status da mesa
+        await restaurantStore.fetchRestaurantsFromAPI();
         goToView('home');
         showToast("Pedido realizado e pago com sucesso! Obrigado!");
     } catch (errorMsg) {
@@ -798,23 +826,36 @@ const handleGoToReservation = (dish) => {
 };
 
 const sendWhatsAppConfirmation = (reservationDetails) => {
-    const { restaurant, table, dateTime, guests } = reservationDetails;
+    const { restaurant, table, dateTime, guests, menu } = reservationDetails;
 
-    // ---- A CORREÇÃO ESTÁ AQUI ----
-    // 1. Verifica se o perfil do usuário e o telefone existem.
     if (!userProfile.value || !userProfile.value.phone) {
         showToast("Não foi possível enviar a confirmação: número de telefone não encontrado no perfil.", "error");
-        console.error("Tentativa de enviar WhatsApp sem número de telefone.");
-        return; // Interrompe a função aqui.
+        return;
     }
-    // 2. Se o telefone existir, o resto do código executa com segurança.
     let phone = userProfile.value.phone.replace(/\D/g, '');
-    // ----------------------------
-
     if (phone.length <= 11) phone = '55' + phone;
+
     const formattedDate = dateTime.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const formattedTime = dateTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    const message = `Olá! 👋\n\nSua reserva no *${restaurant.name}* está confirmada!\n\n*Detalhes:*\n- *Mesa:* ${table.id}\n- *Data:* ${formattedDate}\n- *Hora:* ${formattedTime}\n- *Pessoas:* ${guests}\n\nObrigado por usar o Menu Connect!`;
+
+    let message = `Olá! 👋\n\nSua reserva no *${restaurant.name}* para um Encontro Planejado está confirmada!\n\n*Detalhes:*\n- *Mesa:* ${table.id}\n- *Data:* ${formattedDate}\n- *Hora:* ${formattedTime}\n- *Pessoas:* ${guests}`;
+
+    if (menu && menu.length > 0) {
+        message += `\n\n*Itens pré-selecionados:*\n`;
+        const allItems = menu.flatMap(guestMenu => Object.values(guestMenu)).filter(item => item && item.dishName);
+
+        const itemCounts = allItems.reduce((acc, item) => {
+            acc[item.dishName] = (acc[item.dishName] || 0) + 1;
+            return acc;
+        }, {});
+
+        for (const [dishName, count] of Object.entries(itemCounts)) {
+            message += `- ${count}x ${dishName}\n`;
+        }
+    }
+
+    message += `\nObrigado por usar o Menu Connect!`;
+
     const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
     showToast("Confirmação enviada para o WhatsApp!");
@@ -876,7 +917,7 @@ const closeAddDishModal = () => isAddDishModalOpen.value = false;
 
 const openCustomizeModal = (payload) => {
     // Se vier do carrinho, 'payload' é o item. Se vier do planeador, é um objeto com 'guest' e 'item'.
-    currentDishForAction.value = payload.item || payload;
+    itemToCustomize.value = payload.item || payload;
     // Guarda os dados extras do planeador para podermos salvar no sítio certo
     dishModalProps.value.plannerData = payload.guest ? payload : null;
     isActionModalOpen.value = false;
