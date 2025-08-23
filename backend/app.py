@@ -180,6 +180,45 @@ def add_dish(current_user):
         conn.close()
         return jsonify({"message": "Prato adicionado!", "id": new_id}), 201
     except mysql.connector.Error as err: return jsonify({"error": str(err)}), 500
+    
+@app.route('/api/dishes/<int:dish_id>', methods=['DELETE'])
+@token_required(roles=['admin', 'empresa'])
+def delete_dish(current_user, dish_id):
+    """Exclui um prato, com verificação de permissão."""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # 1. Busca o prato para verificar a quem pertence.
+        cursor.execute("SELECT restaurant_id FROM dishes WHERE id = %s", (dish_id,))
+        dish = cursor.fetchone()
+
+        if not dish:
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "Prato não encontrado."}), 404
+
+        # 2. Lógica de Autorização
+        # Se o usuário for 'empresa', verifica se o prato pertence ao seu restaurante.
+        if current_user['role'] == 'empresa':
+            if dish['restaurant_id'] != current_user.get('restaurant_id'):
+                cursor.close()
+                conn.close()
+                return jsonify({"error": "Permissão negada para excluir este prato."}), 403
+        
+        # Se for 'admin', a verificação acima é ignorada e ele pode prosseguir.
+
+        # 3. Exclui o prato
+        cursor.execute("DELETE FROM dishes WHERE id = %s", (dish_id,))
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+        
+        return jsonify({"message": "Prato excluído com sucesso!"}), 200
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
 
 # --- ROTAS DE FAVORITOS ---
 @app.route('/api/favorites/restaurants', methods=['GET'])

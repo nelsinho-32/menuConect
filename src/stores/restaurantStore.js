@@ -123,6 +123,27 @@ export const useRestaurantStore = defineStore('restaurants', () => {
     }
   }
 
+  /**
+   * Exclui um prato. Requer autenticação de empresa/admin.
+   */
+  async function deleteDish(dishId) {
+    try {
+      const response = await apiClient(`/dishes/${dishId}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao excluir o prato.');
+      }
+      // Atualiza a lista de restaurantes para refletir a exclusão
+      await fetchRestaurantsFromAPI(); 
+      return true;
+    } catch (error) {
+      console.error("Erro ao excluir prato via API:", error.message);
+      return Promise.reject(error.message);
+    }
+  }
+
   return {
     restaurants,
     allDishes,
@@ -133,5 +154,6 @@ export const useRestaurantStore = defineStore('restaurants', () => {
     addDish,
     updateRestaurantMap,
     updateTableStatus,
+    deleteDish,   
   };
 });

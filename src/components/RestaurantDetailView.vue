@@ -51,7 +51,8 @@
 
         <RestaurantMenu :menu="restaurant.menu" :restaurant-id="restaurant.id"
             @open-action-modal="dish => $emit('openActionModal', dish)"
-            @open-add-menu-item-modal="category => $emit('openAddDishModal', { restaurant, category })" />
+            @open-add-menu-item-modal="category => $emit('openAddDishModal', { restaurant, category })"
+            @delete-dish="dish => $emit('deleteDish', dish)" />
 
     </div>
 </template>
@@ -68,7 +69,17 @@ const props = defineProps({
 });
 
 // O evento 'openAddDishModal' é agora re-emitido para o App.vue com os dados necessários
-defineEmits(['backToMain', 'openActionModal', 'openAddDishModal', 'confirmEncontro', 'openMenuItemSelectModal', 'openCustomizeModal', 'openTableSelectModal', 'viewRoute']);
+defineEmits([
+    'backToMain', 
+    'openActionModal', 
+    'openAddDishModal', 
+    'confirmEncontro', 
+    'openMenuItemSelectModal', 
+    'openCustomizeModal', 
+    'openTableSelectModal', 
+    'viewRoute', 
+    'deleteDish'
+]);
 
 const carouselImages = ref([]);
 const currentImageIndex = ref(0);

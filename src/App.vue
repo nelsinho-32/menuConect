@@ -40,6 +40,7 @@ import StartSessionModal from './components/StartSessionModal.vue';
 import SessionControlModal from './components/SessionControlModal.vue';
 import AddOrderToSessionModal from './components/AddOrderToSessionModal.vue';
 import FinishSessionModal from './components/FinishSessionModal.vue';
+import DeleteConfirmationModal from './components/DeleteConfirmationModal.vue';
 
 // 1. IMPORTAÇÃO DAS STORES DO PINIA
 import { useRestaurantStore } from './stores/restaurantStore';
@@ -101,6 +102,8 @@ const itemToCustomize = ref(null);
 const addOrderModalRef = ref(null);
 const isFinishSessionModalOpen = ref(false);
 const consumptionForModal = ref([]);
+const isDeleteModalOpen = ref(false);
+const dishToDelete = ref(null);
 // Dados mockados que serão substituídos por dados reais da API
 const allUsers = reactive([]);
 const notifications = reactive([]);
@@ -439,6 +442,30 @@ const handleAddDish = async (newDishData) => {
     closeAddDishModal();
 };
 
+const openDeleteDishModal = (dish) => {
+    dishToDelete.value = dish;
+    isDeleteModalOpen.value = true;
+};
+
+const closeDeleteDishModal = () => {
+    isDeleteModalOpen.value = false;
+    dishToDelete.value = null;
+};
+
+const handleDeleteDish = async () => {
+    if (!dishToDelete.value) return;
+    try {
+        const success = await restaurantStore.deleteDish(dishToDelete.value.id);
+        if (success) {
+            showToast(`Prato '${dishToDelete.value.dishName}' excluído com sucesso!`);
+        }
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
+    } finally {
+        closeDeleteDishModal();
+    }
+};
+
 const toggleNotifications = () => {
     isNotificationsOpen.value = !isNotificationsOpen.value;
     if (isNotificationsOpen.value) isFriendsChatOpen.value = false; // Fecha o outro painel
@@ -661,7 +688,7 @@ const handleUpdateCartItem = (customizedData) => {
         };
         addOrderModalRef.value?.updateOrderItem(updatedItem);
         showToast("Item atualizado na comanda!");
-    } 
+    }
     // Cenário 2: Atualização vinda do Planeador de Encontros.
     else if (dishModalProps.value.plannerData) {
         const { guest, categoryKey } = dishModalProps.value.plannerData;
@@ -972,7 +999,8 @@ const closeCustomizeModal = () => {
                     :user-profile="userProfile" :all-users="allUsers" @back-to-main="goBack"
                     @open-action-modal="openActionModal" @open-add-dish-modal="openAddDishModal"
                     @confirm-encontro="handleConfirmEncontro" @open-menu-item-select-modal="openSelectMenuItemModal"
-                    @open-customize-modal="openCustomizeModal" @view-route="handleViewRoute" />
+                    @open-customize-modal="openCustomizeModal" @view-route="handleViewRoute"
+                    @delete-dish="openDeleteDishModal" />
                 <RouteView v-if="viewState.name === 'route'" :restaurant="viewState.data" @back="goBack" />
                 <ReservationView v-if="viewState.name === 'reservation'" :restaurant="viewState.data"
                     :user-reservations="reservationStore.userReservations.booked" @back-to-main="goBack"
@@ -1052,6 +1080,8 @@ const closeCustomizeModal = () => {
             <FinishSessionModal v-if="isFinishSessionModalOpen" :session="sessionForModal"
                 :consumption="consumptionForModal" @close="isFinishSessionModalOpen = false"
                 @confirm="handleFinishSession" />
+            <DeleteConfirmationModal v-if="isDeleteModalOpen" :item-name="dishToDelete ? dishToDelete.dishName : ''"
+                @close="closeDeleteDishModal" @confirm="handleDeleteDish" />
             <div
                 :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
                 {{ toastMessage }}

@@ -33,10 +33,18 @@
                 </div>
 
                 <div v-for="item in filteredMenu" :key="item.id" class="bg-white p-4 rounded-lg shadow-sm flex gap-4">
-                    <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.name" class="w-32 h-32 object-cover rounded-md flex-shrink-0">
+                    <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.dishName" class="w-32 h-32 object-cover rounded-md flex-shrink-0">
                     <div class="flex-grow flex flex-col">
                         <div>
-                            <h4 class="font-bold text-lg">{{ item.name }}</h4>
+                            <div class="flex justify-between items-start">
+                                <h4 class="font-bold text-lg">{{ item.dishName }}</h4>
+                                <button v-if="canManageMenu" @click.stop="$emit('deleteDish', item)" title="Excluir Prato" class="text-gray-400 hover:text-red-500 p-1 -mr-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                                        <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                        <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                                    </svg>
+                                </button>
+                            </div>
                             <p class="text-sm text-gray-500 mt-1">{{ item.description }}</p>
                         </div>
                         <div class="mt-auto flex justify-between items-end">
@@ -54,38 +62,31 @@
 
 <script setup>
 import { ref, computed } from 'vue';
-import { useUserStore } from '@/stores/userStore';
-import { useRestaurantStore } from '@/stores/restaurantStore';
 import { useAuthStore } from '@/stores/authStore';
 
-const userStore = useUserStore();
 const authStore = useAuthStore();
-const restaurantStore = useRestaurantStore();
 
 const props = defineProps({
     menu: { type: Array, required: true },
     restaurantId: { type: Number, required: true }
 });
 
-defineEmits(['openActionModal', 'openAddMenuItemModal']);
+// CORREÇÃO: Adicionado 'deleteDish' aos eventos emitidos
+defineEmits(['openActionModal', 'openAddMenuItemModal', 'deleteDish']);
 
 const canManageMenu = computed(() => {
     if (!authStore.currentUser) return false;
-    // Admin pode sempre
     if (authStore.currentUser.role === 'admin') return true;
-    // Empresa só pode se o ID do restaurante corresponder
     if (authStore.currentUser.role === 'empresa') {
         return authStore.currentUser.restaurant_id === props.restaurantId;
     }
     return false;
 });
 
-// Define as categorias fixas para garantir a ordem
 const categories = ref(['Entradas', 'Prato Principal', 'Sobremesas', 'Bebidas']);
 const selectedCategory = ref(categories.value[0]);
 
 const filteredMenu = computed(() => {
-    // Adiciona uma verificação para garantir que o menu não é nulo/indefinido
     if (!props.menu) return [];
     return props.menu.filter(item => item.category === selectedCategory.value);
 });
