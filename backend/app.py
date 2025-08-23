@@ -651,11 +651,10 @@ def list_routes():
 @app.route('/api/management/reservations', methods=['GET'])
 @token_required(roles=['admin', 'empresa'])
 def get_management_reservations(current_user):
-    """Busca todas as reservas ativas para o restaurante do usuário logado."""
+    """Busca todas as reservas ativas para o restaurante, incluindo detalhes do encontro se houver."""
     
     restaurant_id = current_user.get('restaurant_id')
-    # Se for um admin, ele pode opcionalmente passar um restaurant_id para ver
-    if current_user['role'] == 'admin' and not restaurant_id:
+    if current_user['role'] == 'admin':
         restaurant_id = request.args.get('restaurant_id')
         if not restaurant_id:
             return jsonify({"error": "Admin deve especificar um restaurant_id"}), 400
@@ -663,21 +662,41 @@ def get_management_reservations(current_user):
     if not restaurant_id:
         return jsonify({"error": "Usuário empresa não está associado a um restaurante."}), 403
 
+    # --- INÍCIO DA CORREÇÃO ---
+    # A query SQL foi expandida para buscar dados da tabela 'encontros'
     sql = """
-        SELECT r.id, r.table_id, r.booking_time, r.guests, r.status, u.name as user_name
+        SELECT 
+            r.id, r.table_id, r.booking_time, r.guests, r.status, 
+            u.name as user_name, u.phone as user_phone,
+            e.id as encontro_id, e.payment_option
         FROM reservations r
         JOIN users u ON r.user_id = u.id
+        LEFT JOIN encontros e ON r.encontro_id = e.id
         WHERE r.restaurant_id = %s AND r.status IN ('confirmed', 'pending')
         ORDER BY r.booking_time ASC
     """
+    # --- FIM DA CORREÇÃO ---
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
         cursor.execute(sql, (restaurant_id,))
         reservations = cursor.fetchall()
+        
+        # Para cada reserva que veio de um encontro, busca os detalhes dos convidados
         for res in reservations:
+            if res.get('encontro_id'):
+                guest_sql = "SELECT guest_name, menu_selection FROM encontro_guests WHERE encontro_id = %s"
+                cursor.execute(guest_sql, (res['encontro_id'],))
+                guests_details = cursor.fetchall()
+                
+                # Processa o JSON do menu para ser mais legível
+                for guest in guests_details:
+                    guest['menu_selection'] = json.loads(guest['menu_selection'])
+                res['encontro_details'] = guests_details
+            
             if isinstance(res['booking_time'], datetime.datetime):
                 res['booking_time'] = res['booking_time'].isoformat()
+                
         cursor.close()
         conn.close()
         return jsonify(reservations)

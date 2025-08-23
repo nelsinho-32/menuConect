@@ -129,7 +129,7 @@ const restaurantStore = useRestaurantStore();
 const authStore = useAuthStore();
 const sessionStore = useSessionStore();
 
-const emit = defineEmits(['openStartSessionModal', 'openSessionControlModal']);
+const emit = defineEmits(['openStartSessionModal', 'openSessionControlModal', 'openReservationDetailModal']);
 
 const selectedRestaurantId = ref(null);
 const selectedTable = ref(null);
@@ -188,14 +188,25 @@ const onRestaurantChange = (event) => {
 const handleTableClick = (table) => {
     const payload = {
         table: table,
-        restaurant: managedRestaurant.value
+        restaurant: managedRestaurant.value 
     };
 
     if (table.status === 'available') {
         emit('openStartSessionModal', payload);
     } else if (table.status === 'occupied') {
-        emit('openSessionControlModal', payload);
-    } else {
+        // Encontra a reserva correspondente para esta mesa na lista de reservas ativas
+        const reservationForTable = managementStore.state.reservations.find(
+            res => res.table_id.toString() === table.id.toString()
+        );
+        
+        if (reservationForTable) {
+            // Se encontrou uma reserva, abre o modal de DETALHES
+            emit('openReservationDetailModal', reservationForTable);
+        } else {
+            // Se não encontrou (atendimento manual sem reserva), abre o modal de CONTROLE
+            emit('openSessionControlModal', payload);
+        }
+    } else { // cleaning
         alert(`A mesa ${table.id} está a ser limpa.`);
     }
 };

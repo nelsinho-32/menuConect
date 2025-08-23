@@ -41,6 +41,7 @@ import SessionControlModal from './components/SessionControlModal.vue';
 import AddOrderToSessionModal from './components/AddOrderToSessionModal.vue';
 import FinishSessionModal from './components/FinishSessionModal.vue';
 import DeleteConfirmationModal from './components/DeleteConfirmationModal.vue';
+import ReservationDetailModal from './components/ReservationDetailModal.vue';
 
 // 1. IMPORTAÇÃO DAS STORES DO PINIA
 import { useRestaurantStore } from './stores/restaurantStore';
@@ -104,6 +105,8 @@ const isFinishSessionModalOpen = ref(false);
 const consumptionForModal = ref([]);
 const isDeleteModalOpen = ref(false);
 const dishToDelete = ref(null);
+const isReservationDetailModalOpen = ref(false);
+const reservationForDetailModal = ref(null);
 // Dados mockados que serão substituídos por dados reais da API
 const allUsers = reactive([]);
 const notifications = reactive([]);
@@ -372,6 +375,15 @@ const handleStartSession = async (sessionData) => {
     } catch (errorMsg) {
         showToast(`Erro ao iniciar atendimento: ${errorMsg}`, 'error');
     }
+};
+
+const onOpenReservationDetailModal = (reservation) => {
+    reservationForDetailModal.value = reservation;
+    isReservationDetailModalOpen.value = true;
+};
+
+const closeReservationDetailModal = () => {
+    isReservationDetailModalOpen.value = false;
 };
 
 // Abre o modal de finalização
@@ -1030,7 +1042,8 @@ const closeCustomizeModal = () => {
                     @open-table-detail-modal="openTableDetailModal" /> -->
                 <ManagementView v-if="viewState.name === 'dashboard'"
                     @open-start-session-modal="onOpenStartSessionModal"
-                    @open-session-control-modal="onOpenSessionControlModal" />
+                    @open-session-control-modal="onOpenSessionControlModal"
+                    @open-reservation-detail-modal="onOpenReservationDetailModal" />
                 <!-- <DashboardView v-if="viewState.name === 'dashboard'" :reservations="userReservations"
                     :order-history="orderHistory" @navigate-to="goToView" /> -->
                 <ReservationSharedView v-if="viewState.name === 'sharedReservation'"
@@ -1082,6 +1095,8 @@ const closeCustomizeModal = () => {
                 @confirm="handleFinishSession" />
             <DeleteConfirmationModal v-if="isDeleteModalOpen" :item-name="dishToDelete ? dishToDelete.dishName : ''"
                 @close="closeDeleteDishModal" @confirm="handleDeleteDish" />
+            <ReservationDetailModal v-if="isReservationDetailModalOpen" :reservation="reservationForDetailModal"
+                @close="closeReservationDetailModal" />
             <div
                 :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
                 {{ toastMessage }}
