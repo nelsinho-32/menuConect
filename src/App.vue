@@ -22,6 +22,7 @@ import RouteView from './components/views/RouteView.vue';
 import LoginView from './components/views/LoginView.vue';
 import RegisterView from './components/views/RegisterView.vue';
 import ManagementView from './components/views/ManagementView.vue';
+import AnalyticsView from './components/views/AnalyticsView.vue';
 
 // Modais
 import ActionModal from './components/ActionModal.vue';
@@ -55,6 +56,7 @@ import { useReservationStore } from './stores/reservationStore';
 import { useOrderStore } from './stores/orderStore'
 import { useManagementStore } from './stores/managementStore';
 import { useSessionStore } from './stores/sessionStore';
+import { useAnalyticsStore } from './stores/analyticsStore';
 
 // 2. Ativação das stores para usar no componente
 const restaurantStore = useRestaurantStore();
@@ -67,6 +69,7 @@ const reservationStore = useReservationStore();
 const orderStore = useOrderStore();
 const managementStore = useManagementStore();
 const sessionStore = useSessionStore();
+const analyticsStore = useAnalyticsStore();
 
 // --- ESTADO REATIVO (EXISTENTE) ---
 const cart = reactive([]);
@@ -1089,6 +1092,7 @@ const closeCustomizeModal = () => {
                     @open-start-session-modal="onOpenStartSessionModal"
                     @open-session-control-modal="onOpenSessionControlModal"
                     @open-reservation-detail-modal="onOpenReservationDetailModal" />
+                <AnalyticsView v-if="viewState.name === 'analytics'" />
                 <!-- <DashboardView v-if="viewState.name === 'dashboard'" :reservations="userReservations"
                     :order-history="orderHistory" @navigate-to="goToView" /> -->
                 <ReservationSharedView v-if="viewState.name === 'sharedReservation'"

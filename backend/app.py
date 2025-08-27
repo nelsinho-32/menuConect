@@ -1446,6 +1446,84 @@ def get_reviews_for_restaurant(restaurant_id):
         return jsonify(reviews)
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
+    
+@app.route('/api/management/analytics', methods=['GET'])
+@token_required(roles=['admin', 'empresa'])
+def get_analytics_data(current_user):
+    """
+    Busca dados de análise de vendas para um restaurante num determinado período.
+    Aceita o parâmetro 'period' na query string (ex: 'last7days', 'last30days', 'monthToDate').
+    """
+    restaurant_id = current_user.get('restaurant_id')
+    if current_user['role'] == 'admin':
+        restaurant_id = request.args.get('restaurant_id', restaurant_id)
+    if not restaurant_id:
+        return jsonify({"error": "Nenhum restaurante associado."}), 403
+
+    period = request.args.get('period', 'last7days') # Padrão para os últimos 7 dias
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # --- Lógica para o Histórico de Vendas ---
+        # Define o intervalo de datas com base no período solicitado
+        if period == 'last30days':
+            date_filter = "o.created_at >= CURDATE() - INTERVAL 30 DAY"
+        elif period == 'monthToDate':
+            date_filter = "YEAR(o.created_at) = YEAR(CURDATE()) AND MONTH(o.created_at) = MONTH(CURDATE())"
+        else: # Padrão é 'last7days'
+            date_filter = "o.created_at >= CURDATE() - INTERVAL 7 DAY"
+
+        sales_history_sql = f"""
+            SELECT 
+                DATE(o.created_at) as date, 
+                SUM(o.total_price) as total_sales
+            FROM orders o
+            WHERE o.restaurant_id = %s AND {date_filter}
+            GROUP BY DATE(o.created_at)
+            ORDER BY date ASC
+        """
+        cursor.execute(sales_history_sql, (restaurant_id,))
+        sales_history = cursor.fetchall()
+        
+        # Formata a data para ser facilmente lida pelo JavaScript
+        for sale in sales_history:
+            sale['date'] = sale['date'].strftime('%Y-%m-%d')
+            sale['total_sales'] = float(sale['total_sales'])
+
+        # --- Lógica para os Pratos Mais Rentáveis ---
+        top_dishes_sql = f"""
+            SELECT 
+                d.name as dishName,
+                SUM(oi.quantity) as total_quantity_sold,
+                SUM(oi.quantity * oi.price_at_time) as total_revenue
+            FROM order_items oi
+            JOIN dishes d ON oi.dish_id = d.id
+            JOIN orders o ON oi.order_id = o.id
+            WHERE o.restaurant_id = %s AND {date_filter}
+            GROUP BY d.name
+            ORDER BY total_revenue DESC
+            LIMIT 5
+        """
+        cursor.execute(top_dishes_sql, (restaurant_id,))
+        top_dishes = cursor.fetchall()
+
+        # Converte Decimals para floats
+        for dish in top_dishes:
+            dish['total_revenue'] = float(dish['total_revenue'])
+
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            "sales_history": sales_history,
+            "top_dishes": top_dishes
+        })
+
+    except mysql.connector.Error as err:
+        print(f"ERRO DE BANCO DE DADOS em get_analytics_data: {err}")
+        return jsonify({"error": str(err)}), 500
 
 # --- Executar a Aplicação ---
 if __name__ == '__main__':
