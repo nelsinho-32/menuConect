@@ -96,12 +96,30 @@ export const useSessionStore = defineStore('sessions', () => {
     }
   }
 
+  async function startSessionFromReservation(reservationId) {
+    try {
+      const response = await apiClient('/management/sessions/from-reservation', {
+        method: 'POST',
+        body: JSON.stringify({ reservationId })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao iniciar atendimento a partir da reserva.');
+      }
+      return data; // Retorna { sessionId: ... }
+    } catch (err) {
+      console.error("Erro ao iniciar sessão a partir da reserva:", err.message);
+      return Promise.reject(err.message);
+    }
+  }
+
   return {
     state,
     startSession,
     fetchActiveSessionForTable,
     clearActiveSession,
     addOrderToSession ,
-    finishSession
+    finishSession,
+    startSessionFromReservation
   };
 });

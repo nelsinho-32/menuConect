@@ -948,7 +948,7 @@ def create_encontro(current_user):
 @app.route('/api/management/tables/<string:table_id>/details', methods=['GET'])
 @token_required(roles=['admin', 'empresa'])
 def get_table_details(current_user, table_id):
-    """Busca detalhes completos de uma mesa ocupada (reserva, cliente, consumo)."""
+    """Busca detalhes de uma mesa, priorizando uma sessão ativa e, em seguida, uma reserva confirmada."""
     restaurant_id = current_user.get('restaurant_id')
     if current_user['role'] == 'admin':
         restaurant_id = request.args.get('restaurant_id', restaurant_id)
@@ -959,41 +959,54 @@ def get_table_details(current_user, table_id):
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
 
-        # 1. Encontra a reserva ativa mais recente para esta mesa
+        # 1. Tenta encontrar uma SESSÃO ATIVA primeiro
+        session_sql = "SELECT id as session_id, start_time, guests, customer_names FROM table_sessions WHERE restaurant_id = %s AND table_id = %s AND status = 'active' ORDER BY start_time DESC LIMIT 1"
+        cursor.execute(session_sql, (restaurant_id, table_id))
+        session = cursor.fetchone()
+
+        if session:
+            # Se encontrou uma sessão, busca o consumo dela
+            orders_sql = "SELECT oi.quantity, d.name as dishName, oi.price_at_time, oi.customization FROM order_items oi JOIN dishes d ON oi.dish_id = d.id JOIN orders o ON oi.order_id = o.id WHERE o.session_id = %s"
+            cursor.execute(orders_sql, (session['session_id'],))
+            consumption = cursor.fetchall()
+            for item in consumption:
+                if item.get('customization'):
+                    item['customization'] = json.loads(item['customization'])
+            
+            response_data = {"type": "session", "details": session, "consumption": consumption}
+            return jsonify(response_data)
+
+        # --- INÍCIO DA NOVA LÓGICA ---
+        # 2. Se NÃO encontrou sessão ativa, procura por uma RESERVA CONFIRMADA
         reservation_sql = """
-            SELECT r.id as reservation_id, r.encontro_id, r.booking_time, r.guests, u.name as user_name, u.avatarUrl
+            SELECT r.id as reservation_id, r.booking_time, r.guests, r.encontro_id, u.name as user_name, u.phone as user_phone
             FROM reservations r
             JOIN users u ON r.user_id = u.id
             WHERE r.restaurant_id = %s AND r.table_id = %s AND r.status = 'confirmed'
-            ORDER BY r.booking_time DESC
+            ORDER BY r.booking_time ASC
             LIMIT 1
         """
         cursor.execute(reservation_sql, (restaurant_id, table_id))
-        reservation_details = cursor.fetchone()
+        reservation = cursor.fetchone()
 
-        if not reservation_details:
-            return jsonify({"error": "Nenhuma reserva ativa encontrada para esta mesa."}), 404
+        if reservation:
+            consumption = []
+            if reservation.get('encontro_id'):
+                guest_sql = "SELECT guest_name, menu_selection FROM encontro_guests WHERE encontro_id = %s"
+                cursor.execute(guest_sql, (reservation['encontro_id'],))
+                guests_details = cursor.fetchall()
+                # Transforma o menu em algo parecido com o consumo
+                for guest in guests_details:
+                    menu = json.loads(guest['menu_selection'])
+                    for item_type, item_details in menu.items():
+                        if item_details and item_details.get('dishName'):
+                             consumption.append(f"({guest['guest_name']}) {item_details['dishName']}")
+            
+            response_data = {"type": "reservation", "details": reservation, "consumption": consumption}
+            return jsonify(response_data)
+        # --- FIM DA NOVA LÓGICA ---
 
-        consumption_items = []
-        # 2. Verifica se a reserva veio de um encontro
-        if reservation_details.get('encontro_id'):
-            # Se veio de um encontro, busca os itens pré-selecionados
-            consumption_sql = "SELECT guest_name, menu_selection FROM encontro_guests WHERE encontro_id = %s"
-            cursor.execute(consumption_sql, (reservation_details['encontro_id'],))
-            encontro_guests = cursor.fetchall()
-            # Transforma o JSON do menu em algo mais fácil de ler
-            for guest in encontro_guests:
-                menu = json.loads(guest['menu_selection'])
-                for item_type, item_details in menu.items():
-                    consumption_items.append(f"{guest['guest_name']} ({item_type}): {item_details.get('dishName', 'N/A')}")
-        else:
-            # Se for uma reserva normal, busca os itens dos pedidos
-            consumption_sql = "SELECT oi.quantity, d.name as dishName FROM order_items oi JOIN dishes d ... JOIN orders o ... WHERE o.reservation_id = %s"
-            cursor.execute(consumption_sql, (reservation_details['reservation_id'],))
-            consumption_items = [f"{item['quantity']}x {item['dishName']}" for item in cursor.fetchall()]
-
-        response_data = {"reservation": reservation_details, "consumption": consumption_items}
-        return jsonify(response_data)
+        return jsonify({"error": "Nenhuma sessão ativa ou reserva encontrada para esta mesa."}), 404
 
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
@@ -1227,10 +1240,8 @@ def add_order_to_session(current_user, session_id):
 @app.route('/api/management/sessions/<int:session_id>/finish', methods=['PUT'])
 @token_required(roles=['admin', 'empresa'])
 def finish_table_session(current_user, session_id):
-    """Finaliza uma sessão de mesa, registando o pagamento e liberando a mesa."""
     data = request.get_json()
-    payment_method = data.get('paymentMethod') # Recebe a forma de pagamento
-
+    payment_method = data.get('paymentMethod')
     if not payment_method:
         return jsonify({"error": "A forma de pagamento é obrigatória."}), 400
 
@@ -1238,23 +1249,22 @@ def finish_table_session(current_user, session_id):
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
 
-        # 1. Busca os detalhes da sessão
-        cursor.execute("SELECT restaurant_id, table_id FROM table_sessions WHERE id = %s", (session_id,))
+        cursor.execute("SELECT restaurant_id, table_id FROM table_sessions WHERE id = %s AND status = 'active'", (session_id,))
         session = cursor.fetchone()
-        if not session: return jsonify({"error": "Sessão não encontrada."}), 404
+        if not session: return jsonify({"error": "Sessão ativa não encontrada."}), 404
         
         restaurant_id = session['restaurant_id']
         table_id = session['table_id']
 
-        # 2. Valida a permissão
         if current_user['role'] == 'empresa' and current_user.get('restaurant_id') != restaurant_id:
             return jsonify({"error": "Permissão negada."}), 403
 
-        # 3. Atualiza a sessão para 'finished' ou 'paid' e regista o pagamento
+        # --- CORREÇÃO: Marcar pedidos como 'completed' ---
+        cursor.execute("UPDATE orders SET status = 'completed' WHERE session_id = %s", (session_id,))
+
         sql_session = "UPDATE table_sessions SET status = 'paid', end_time = %s, payment_method = %s WHERE id = %s"
         cursor.execute(sql_session, (datetime.datetime.now(), payment_method, session_id))
 
-        # 4. Atualiza o status da mesa no mapa para 'available'
         cursor.execute("SELECT map_layout FROM restaurants WHERE id = %s", (restaurant_id,))
         result = cursor.fetchone()
         if result and result['map_layout']:
@@ -1268,6 +1278,68 @@ def finish_table_session(current_user, session_id):
 
         conn.commit()
         return jsonify({"message": "Sessão finalizada com sucesso."})
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+            
+@app.route('/api/management/sessions/from-reservation', methods=['POST'])
+@token_required(roles=['admin', 'empresa'])
+def start_session_from_reservation(current_user):
+    """Cria uma nova sessão a partir de uma reserva existente."""
+    data = request.get_json()
+    reservation_id = data.get('reservationId')
+    if not reservation_id:
+        return jsonify({"error": "ID da reserva é obrigatório."}), 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # 1. Busca os dados da reserva
+        cursor.execute("SELECT * FROM reservations WHERE id = %s AND status = 'confirmed'", (reservation_id,))
+        reservation = cursor.fetchone()
+        if not reservation:
+            return jsonify({"error": "Reserva confirmada não encontrada."}), 404
+
+        restaurant_id = reservation['restaurant_id']
+        
+        # 2. Inicia a nova sessão
+        session_sql = "INSERT INTO table_sessions (restaurant_id, table_id, start_time, guests, reservation_id) VALUES (%s, %s, %s, %s, %s)"
+        cursor.execute(session_sql, (restaurant_id, reservation['table_id'], datetime.datetime.now(), reservation['guests'], reservation_id))
+        session_id = cursor.lastrowid
+
+        # 3. Se a reserva veio de um encontro, copia os itens para um novo pedido
+        if reservation.get('encontro_id'):
+            cursor.execute("SELECT menu_selection FROM encontro_guests WHERE encontro_id = %s", (reservation['encontro_id'],))
+            guests_menu = cursor.fetchall()
+            
+            all_items = []
+            for guest in guests_menu:
+                menu = json.loads(guest['menu_selection'])
+                for item_type, item_details in menu.items():
+                    if item_details and item_details.get('id'):
+                        all_items.append({**item_details, 'quantity': 1})
+            
+            if all_items:
+                total_price = sum(Decimal(item.get('price', 0)) * int(item.get('quantity', 0)) for item in all_items)
+                order_sql = "INSERT INTO orders (user_id, restaurant_id, total_price, session_id, status, reservation_id) VALUES (%s, %s, %s, %s, %s, %s)"
+                cursor.execute(order_sql, (reservation['user_id'], restaurant_id, total_price, session_id, 'in_progress', reservation_id))
+                order_id = cursor.lastrowid
+                
+                for item in all_items:
+                    customization_json = json.dumps(item.get('customization')) if item.get('customization') else None
+                    item_sql = "INSERT INTO order_items (order_id, dish_id, quantity, price_at_time, customization) VALUES (%s, %s, %s, %s, %s)"
+                    cursor.execute(item_sql, (order_id, item['id'], item['quantity'], Decimal(item['price']), customization_json))
+        
+        # 4. Atualiza a reserva original para 'completed' para não aparecer mais
+        cursor.execute("UPDATE reservations SET status = 'completed' WHERE id = %s", (reservation_id,))
+
+        conn.commit()
+        return jsonify({"message": "Atendimento iniciado com sucesso!", "sessionId": session_id}), 201
 
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500

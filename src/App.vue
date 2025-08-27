@@ -751,6 +751,30 @@ const toggleRestaurantFavorite = async (restaurant) => {
     }
 };
 
+const handleStartSessionFromReservation = async (reservation) => {
+    try {
+        // 1. Chama a nova ação da store para criar a sessão no backend
+        await sessionStore.startSessionFromReservation(reservation.id);
+        showToast(`Atendimento iniciado para a reserva da mesa ${reservation.table_id}!`);
+        
+        // 2. Recarrega os dados para que a reserva desapareça da lista e o mapa seja atualizado
+        await managementStore.fetchManagementData();
+        await restaurantStore.fetchRestaurantsFromAPI();
+        
+        closeReservationDetailModal(); // Fecha o modal de detalhes
+
+        // 3. (Opcional) Abre o modal de controlo da sessão que acabámos de criar
+        const restaurant = restaurantStore.restaurants.find(r => r.id === reservation.restaurant_id);
+        const table = restaurant?.tables.find(t => t.id.toString() === reservation.table_id.toString());
+        if(restaurant && table) {
+            onOpenSessionControlModal({ table, restaurant });
+        }
+
+    } catch (errorMsg) {
+        showToast(`Erro ao iniciar atendimento: ${errorMsg}`, 'error');
+    }
+};
+
 const openActionModal = (dish) => {
     if (dish && dish.id) {
         currentDishForAction.value = dish;
@@ -1096,7 +1120,7 @@ const closeCustomizeModal = () => {
             <DeleteConfirmationModal v-if="isDeleteModalOpen" :item-name="dishToDelete ? dishToDelete.dishName : ''"
                 @close="closeDeleteDishModal" @confirm="handleDeleteDish" />
             <ReservationDetailModal v-if="isReservationDetailModalOpen" :reservation="reservationForDetailModal"
-                @close="closeReservationDetailModal" />
+                @close="closeReservationDetailModal" @start-session="handleStartSessionFromReservation" />
             <div
                 :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
                 {{ toastMessage }}

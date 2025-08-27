@@ -35,8 +35,11 @@
                     </div>
                 </div>
             </div>
-             <div class="p-4 bg-gray-50 border-t flex justify-end">
-                <button @click="$emit('close')" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-indigo-700">Fechar</button>
+             <div class="p-4 bg-gray-50 border-t flex justify-between items-center">
+                <button @click="$emit('startSession', reservation)" class="bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700">
+                    Iniciar Atendimento
+                </button>
+                <button @click="$emit('close')" class="bg-gray-200 text-gray-700 font-bold py-2 px-6 rounded-lg hover:bg-gray-300">Fechar</button>
             </div>
         </div>
     </div>
@@ -49,7 +52,7 @@ const props = defineProps({
     reservation: { type: Object, required: true }
 });
 
-defineEmits(['close']);
+defineEmits(['close', 'startSession']);
 
 const formattedBookingTime = computed(() => {
     if (!props.reservation.booking_time) return 'N/A';
