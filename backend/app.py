@@ -115,29 +115,51 @@ def get_restaurants():
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id, name, cuisine, city, lat, lng, imageUrl, logoUrl, isNew, map_layout FROM restaurants")
+        
+        # --- INÍCIO DA CORREÇÃO: Adiciona average_rating e review_count à query ---
+        cursor.execute("SELECT id, name, cuisine, city, lat, lng, imageUrl, logoUrl, isNew, map_layout, galleryUrls, average_rating, review_count FROM restaurants")
+        # --- FIM DA CORREÇÃO ---
+        
         restaurants = cursor.fetchall()
 
         for r in restaurants:
             r['location'] = {'lat': r.pop('lat'), 'lng': r.pop('lng')}
             
-            # CORREÇÃO PARA CARREGAR O MAPA:
-            # Se a coluna map_layout tiver dados, o Python carrega-os como string.
-            # json.loads() transforma essa string de volta num objeto/dicionário.
-            map_layout_data = json.loads(r['map_layout']) if r.get('map_layout') else {}
+            try:
+                map_layout_data = json.loads(r['map_layout']) if r.get('map_layout') else {}
+            except (json.JSONDecodeError, TypeError):
+                map_layout_data = {}
             r['tables'] = map_layout_data.get('tables', [])
             r['mapElements'] = map_layout_data.get('mapElements', [])
             r['floorPatternId'] = map_layout_data.get('floorPatternId', 'floor-marble')
-            r.pop('map_layout', None) # Remove a coluna original para não ser enviada.
+            r.pop('map_layout', None)
 
+            try:
+                gallery_urls_str = r.get('galleryUrls')
+                r['galleryUrls'] = json.loads(gallery_urls_str) if isinstance(gallery_urls_str, str) else []
+            except (json.JSONDecodeError, TypeError):
+                r['galleryUrls'] = []
+                
+            if r.get('average_rating') is not None:
+                r['average_rating'] = float(r['average_rating'])
+            
             cursor.execute("SELECT id, name AS dishName, description, price, imageUrl, category, restaurant_id FROM dishes WHERE restaurant_id = %s", (r['id'],))
             r['menu'] = cursor.fetchall()
+            
+            for dish in r['menu']:
+                dish['restaurantName'] = r['name']
+                dish['restaurantId'] = r['id']
             
         cursor.close()
         conn.close()
         return jsonify(restaurants)
+        
     except mysql.connector.Error as err: 
-        return jsonify({"error": str(err)}), 500
+        print(f"ERRO DE BANCO DE DADOS em get_restaurants: {err}") 
+        return jsonify({"error": f"Erro de banco de dados: {err}"}), 500
+    except Exception as e:
+        print(f"ERRO INESPERADO em get_restaurants: {e}")
+        return jsonify({"error": f"Erro inesperado no servidor: {e}"}), 500
 
 @app.route('/api/restaurants', methods=['POST'])
 @token_required(roles=['admin'])
@@ -1347,6 +1369,83 @@ def start_session_from_reservation(current_user):
         if 'conn' in locals() and conn.is_connected():
             cursor.close()
             conn.close()
+            
+@app.route('/api/reviews', methods=['POST'])
+@token_required(roles=['cliente', 'admin']) # Apenas clientes podem deixar avaliações
+def add_review(current_user):
+    """Adiciona uma nova avaliação e recalcula a média do restaurante."""
+    data = request.get_json()
+    restaurant_id = data.get('restaurantId')
+    rating = data.get('rating')
+    comment = data.get('comment')
+
+    if not all([restaurant_id, rating]):
+        return jsonify({"error": "ID do restaurante e avaliação são obrigatórios."}), 400
+    if not 1 <= rating <= 5:
+        return jsonify({"error": "A avaliação deve ser entre 1 e 5."}), 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        # Insere a nova avaliação
+        sql_insert = "INSERT INTO reviews (restaurant_id, user_id, rating, comment) VALUES (%s, %s, %s, %s)"
+        cursor.execute(sql_insert, (restaurant_id, current_user['id'], rating, comment))
+        
+        # Recalcula a média e a contagem de avaliações
+        sql_update = """
+            UPDATE restaurants r
+            SET 
+                r.average_rating = (SELECT AVG(rating) FROM reviews WHERE restaurant_id = r.id),
+                r.review_count = (SELECT COUNT(*) FROM reviews WHERE restaurant_id = r.id)
+            WHERE r.id = %s
+        """
+        cursor.execute(sql_update, (restaurant_id,))
+        
+        conn.commit()
+        return jsonify({"message": "Avaliação adicionada com sucesso!"}), 201
+
+    except mysql.connector.Error as err:
+        if err.errno == 1062: # Chave duplicada
+            return jsonify({"error": "Você já avaliou este restaurante."}), 409
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+@app.route('/api/restaurants/<int:restaurant_id>/reviews', methods=['GET'])
+def get_reviews_for_restaurant(restaurant_id):
+    """Busca todas as avaliações para um restaurante específico."""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        
+        sql = """
+            SELECT 
+                rev.rating, 
+                rev.comment, 
+                rev.created_at,
+                usr.name as userName,
+                usr.avatarUrl as userAvatarUrl
+            FROM reviews rev
+            JOIN users usr ON rev.user_id = usr.id
+            WHERE rev.restaurant_id = %s
+            ORDER BY rev.created_at DESC
+        """
+        cursor.execute(sql, (restaurant_id,))
+        reviews = cursor.fetchall()
+
+        # Formata a data para ser lida facilmente pelo JavaScript
+        for review in reviews:
+            if isinstance(review['created_at'], datetime.datetime):
+                review['created_at'] = review['created_at'].isoformat()
+
+        cursor.close()
+        conn.close()
+        return jsonify(reviews)
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
 
 # --- Executar a Aplicação ---
 if __name__ == '__main__':

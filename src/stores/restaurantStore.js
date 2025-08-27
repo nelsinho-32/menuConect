@@ -4,6 +4,7 @@ import apiClient from '@/api/client'; // Importa o nosso assistente de API
 
 export const useRestaurantStore = defineStore('restaurants', () => {
   const restaurants = reactive([]);
+  const reviews = reactive([]);
 
   const allDishes = computed(() => {
     return restaurants.flatMap(r => r.menu || []);
@@ -144,8 +145,50 @@ export const useRestaurantStore = defineStore('restaurants', () => {
     }
   }
 
+  /**
+   * Busca todas as avaliações para um restaurante específico.
+   */
+  async function fetchReviewsForRestaurant(restaurantId) {
+    try {
+      const response = await apiClient(`/restaurants/${restaurantId}/reviews`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao buscar as avaliações.');
+      }
+      reviews.length = 0; // Limpa a lista antiga
+      reviews.push(...data); // Preenche com as novas avaliações
+    } catch (error) {
+      console.error("Erro ao buscar avaliações:", error.message);
+    }
+  }
+
+  /**
+   * Submete uma nova avaliação para um restaurante.
+   */
+  async function submitReview(reviewData) {
+    try {
+      const response = await apiClient('/reviews', {
+        method: 'POST',
+        body: JSON.stringify(reviewData)
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao submeter a avaliação.');
+      }
+      // Após submeter, recarrega a lista de restaurantes (para atualizar a nota média)
+      // e as avaliações do restaurante específico.
+      await fetchRestaurantsFromAPI();
+      await fetchReviewsForRestaurant(reviewData.restaurantId);
+      return true;
+    } catch (error) {
+      console.error("Erro ao submeter avaliação:", error.message);
+      return Promise.reject(error.message);
+    }
+  }
+
   return {
     restaurants,
+    reviews,
     allDishes,
     featuredRestaurants,
     searchableItems,
@@ -154,6 +197,8 @@ export const useRestaurantStore = defineStore('restaurants', () => {
     addDish,
     updateRestaurantMap,
     updateTableStatus,
-    deleteDish,   
+    deleteDish, 
+    fetchReviewsForRestaurant,
+    submitReview,  
   };
 });

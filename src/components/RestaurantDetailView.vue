@@ -41,6 +41,30 @@
                 class="mt-6 bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600">
                 Ver Rota
             </button>
+            <section class="my-12">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="section-title">Avaliações ({{ restaurant.review_count || 0 }})</h2>
+        <button @click="$emit('openAddReviewModal', restaurant)" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">
+            Deixar uma Avaliação
+        </button>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow-lg">
+        <div v-if="restaurant.review_count > 0" class="flex items-center gap-2 mb-4 border-b pb-4">
+            <span class="text-4xl font-extrabold text-gray-800">{{ restaurant.average_rating.toFixed(1).replace('.', ',') }}</span>
+            <div class="flex items-center text-2xl" :title="`${restaurant.average_rating.toFixed(2)} de 5 estrelas`">
+                 <span v-for="n in 5" :key="n" :class="n <= Math.round(restaurant.average_rating) ? 'text-yellow-400' : 'text-gray-300'">★</span>
+            </div>
+            <span class="text-gray-500 ml-2">de {{ restaurant.review_count }} avaliações</span>
+        </div>
+        
+        <div v-if="restaurantStore.reviews.length > 0">
+            <ReviewCard v-for="review in restaurantStore.reviews" :key="review.id" :review="review" />
+        </div>
+        <div v-else class="text-center text-gray-500 py-8">
+            <p>{{ restaurant.review_count > 0 ? 'A carregar avaliações...' : 'Este restaurante ainda não tem avaliações. Seja o primeiro!' }}</p>
+        </div>
+    </div>
+</section>
         </div>
 
         <AIEncontroSection :restaurant="restaurant" :user-profile="userProfile" :all-users="allUsers"
@@ -61,6 +85,10 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import AIEncontroSection from './sections/AIEncontroSection.vue';
 import RestaurantMenu from './RestaurantMenu.vue';
+import ReviewCard from  './ReviewCard.vue';
+import { useRestaurantStore } from '@/stores/restaurantStore';
+
+const restaurantStore = useRestaurantStore();
 
 const props = defineProps({
     restaurant: { type: Object, required: true },
@@ -78,7 +106,8 @@ defineEmits([
     'openCustomizeModal', 
     'openTableSelectModal', 
     'viewRoute', 
-    'deleteDish'
+    'deleteDish',
+    'openAddReviewModal'
 ]);
 
 const carouselImages = ref([]);
@@ -101,6 +130,19 @@ const nextImage = () => {
 const prevImage = () => {
     currentImageIndex.value = (currentImageIndex.value - 1 + carouselImages.value.length) % carouselImages.value.length;
 };
+
+onMounted(() => {
+    setupCarousel();
+    if(props.restaurant?.id) {
+        restaurantStore.fetchReviewsForRestaurant(props.restaurant.id);
+    }
+});
+
+watch(() => props.restaurant, (newRestaurant) => {
+    if (newRestaurant?.id) {
+        restaurantStore.fetchReviewsForRestaurant(newRestaurant.id);
+    }
+});
 
 onMounted(setupCarousel);
 // Garante que o carrossel é atualizado se o restaurante mudar

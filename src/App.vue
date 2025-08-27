@@ -42,6 +42,7 @@ import AddOrderToSessionModal from './components/AddOrderToSessionModal.vue';
 import FinishSessionModal from './components/FinishSessionModal.vue';
 import DeleteConfirmationModal from './components/DeleteConfirmationModal.vue';
 import ReservationDetailModal from './components/ReservationDetailModal.vue';
+import AddReviewModal from './components/AddReviewModal.vue';
 
 // 1. IMPORTAÇÃO DAS STORES DO PINIA
 import { useRestaurantStore } from './stores/restaurantStore';
@@ -107,6 +108,8 @@ const isDeleteModalOpen = ref(false);
 const dishToDelete = ref(null);
 const isReservationDetailModalOpen = ref(false);
 const reservationForDetailModal = ref(null);
+const isAddReviewModalOpen = ref(false);
+const restaurantToReview = ref(null);
 // Dados mockados que serão substituídos por dados reais da API
 const allUsers = reactive([]);
 const notifications = reactive([]);
@@ -324,6 +327,24 @@ const handleConfirmOrderForSession = async (items) => {
         isSessionControlModalOpen.value = true;
     } catch (error) {
         showToast(`Erro ao adicionar pedido: ${error}`, "error");
+    }
+};
+
+const onOpenAddReviewModal = (restaurant) => {
+    restaurantToReview.value = restaurant;
+    isAddReviewModalOpen.value = true;
+};
+
+const handleReviewSubmit = async (reviewData) => {
+    try {
+        await restaurantStore.submitReview({
+            ...reviewData,
+            restaurantId: restaurantToReview.value.id
+        });
+        showToast('A sua avaliação foi submetida com sucesso!');
+        isAddReviewModalOpen.value = false;
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
     }
 };
 
@@ -756,17 +777,17 @@ const handleStartSessionFromReservation = async (reservation) => {
         // 1. Chama a nova ação da store para criar a sessão no backend
         await sessionStore.startSessionFromReservation(reservation.id);
         showToast(`Atendimento iniciado para a reserva da mesa ${reservation.table_id}!`);
-        
+
         // 2. Recarrega os dados para que a reserva desapareça da lista e o mapa seja atualizado
         await managementStore.fetchManagementData();
         await restaurantStore.fetchRestaurantsFromAPI();
-        
+
         closeReservationDetailModal(); // Fecha o modal de detalhes
 
         // 3. (Opcional) Abre o modal de controlo da sessão que acabámos de criar
         const restaurant = restaurantStore.restaurants.find(r => r.id === reservation.restaurant_id);
         const table = restaurant?.tables.find(t => t.id.toString() === reservation.table_id.toString());
-        if(restaurant && table) {
+        if (restaurant && table) {
             onOpenSessionControlModal({ table, restaurant });
         }
 
@@ -1036,7 +1057,7 @@ const closeCustomizeModal = () => {
                     @open-action-modal="openActionModal" @open-add-dish-modal="openAddDishModal"
                     @confirm-encontro="handleConfirmEncontro" @open-menu-item-select-modal="openSelectMenuItemModal"
                     @open-customize-modal="openCustomizeModal" @view-route="handleViewRoute"
-                    @delete-dish="openDeleteDishModal" />
+                    @delete-dish="openDeleteDishModal" @open-add-review-modal="onOpenAddReviewModal" />
                 <RouteView v-if="viewState.name === 'route'" :restaurant="viewState.data" @back="goBack" />
                 <ReservationView v-if="viewState.name === 'reservation'" :restaurant="viewState.data"
                     :user-reservations="reservationStore.userReservations.booked" @back-to-main="goBack"
@@ -1121,6 +1142,8 @@ const closeCustomizeModal = () => {
                 @close="closeDeleteDishModal" @confirm="handleDeleteDish" />
             <ReservationDetailModal v-if="isReservationDetailModalOpen" :reservation="reservationForDetailModal"
                 @close="closeReservationDetailModal" @start-session="handleStartSessionFromReservation" />
+            <AddReviewModal v-if="isAddReviewModalOpen" :restaurant-name="restaurantToReview.name"
+                @close="isAddReviewModalOpen = false" @submit-review="handleReviewSubmit" />
             <div
                 :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
                 {{ toastMessage }}
