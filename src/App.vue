@@ -23,6 +23,7 @@ import LoginView from './components/views/LoginView.vue';
 import RegisterView from './components/views/RegisterView.vue';
 import ManagementView from './components/views/ManagementView.vue';
 import AnalyticsView from './components/views/AnalyticsView.vue';
+import PromotionsView from './components/views/PromotionsView.vue';
 
 // Modais
 import ActionModal from './components/ActionModal.vue';
@@ -44,6 +45,7 @@ import FinishSessionModal from './components/FinishSessionModal.vue';
 import DeleteConfirmationModal from './components/DeleteConfirmationModal.vue';
 import ReservationDetailModal from './components/ReservationDetailModal.vue';
 import AddReviewModal from './components/AddReviewModal.vue';
+import PromotionModal from './components/PromotionModal.vue';
 
 // 1. IMPORTAÇÃO DAS STORES DO PINIA
 import { useRestaurantStore } from './stores/restaurantStore';
@@ -57,6 +59,7 @@ import { useOrderStore } from './stores/orderStore'
 import { useManagementStore } from './stores/managementStore';
 import { useSessionStore } from './stores/sessionStore';
 import { useAnalyticsStore } from './stores/analyticsStore';
+import { usePromotionStore } from './stores/promotionsStore';
 
 // 2. Ativação das stores para usar no componente
 const restaurantStore = useRestaurantStore();
@@ -70,6 +73,7 @@ const orderStore = useOrderStore();
 const managementStore = useManagementStore();
 const sessionStore = useSessionStore();
 const analyticsStore = useAnalyticsStore();
+const promotionStore = usePromotionStore();
 
 // --- ESTADO REATIVO (EXISTENTE) ---
 const cart = reactive([]);
@@ -113,6 +117,7 @@ const isReservationDetailModalOpen = ref(false);
 const reservationForDetailModal = ref(null);
 const isAddReviewModalOpen = ref(false);
 const restaurantToReview = ref(null);
+const isPromotionModalOpen = ref(false);
 // Dados mockados que serão substituídos por dados reais da API
 const allUsers = reactive([]);
 const notifications = reactive([]);
@@ -346,6 +351,22 @@ const handleReviewSubmit = async (reviewData) => {
         });
         showToast('A sua avaliação foi submetida com sucesso!');
         isAddReviewModalOpen.value = false;
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
+    }
+};
+
+const onOpenPromotionModal = () => {
+    isPromotionModalOpen.value = true;
+};
+
+const handleCreatePromotion = async (promotionData) => {
+    try {
+        const success = await promotionStore.createPromotion(promotionData);
+        if (success) {
+            showToast('Promoção criada com sucesso!');
+            isPromotionModalOpen.value = false;
+        }
     } catch (errorMsg) {
         showToast(errorMsg, 'error');
     }
@@ -1099,6 +1120,7 @@ const closeCustomizeModal = () => {
                     :encounter="viewState.data.encounter" :current-user="viewState.data.currentUser"
                     :restaurant="viewState.data.restaurant" @back-to-main="goToView('home')"
                     @open-menu-item-select-modal="openSelectMenuItemModal" />
+                <PromotionsView v-if="viewState.name === 'promotions'" @open-promotion-modal="onOpenPromotionModal" />
             </main>
 
             <Footer />
@@ -1148,6 +1170,8 @@ const closeCustomizeModal = () => {
                 @close="closeReservationDetailModal" @start-session="handleStartSessionFromReservation" />
             <AddReviewModal v-if="isAddReviewModalOpen" :restaurant-name="restaurantToReview.name"
                 @close="isAddReviewModalOpen = false" @submit-review="handleReviewSubmit" />
+            <PromotionModal v-if="isPromotionModalOpen" @close="isPromotionModalOpen = false"
+                @create-promotion="handleCreatePromotion" />
             <div
                 :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
                 {{ toastMessage }}

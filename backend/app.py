@@ -146,6 +146,14 @@ def get_restaurants():
             cursor.execute("SELECT id, name AS dishName, description, price, imageUrl, category, restaurant_id FROM dishes WHERE restaurant_id = %s", (r['id'],))
             r['menu'] = cursor.fetchall()
             
+            promo_sql = "SELECT id, title, description, discount_type, discount_value FROM promotions WHERE restaurant_id = %s AND active = TRUE AND (end_date IS NULL OR end_date >= CURDATE())"
+            cursor.execute(promo_sql, (r['id'],))
+            promotions = cursor.fetchall()
+            for promo in promotions:
+                if isinstance(promo['discount_value'], Decimal):
+                    promo['discount_value'] = float(promo['discount_value'])
+            r['promotions'] = promotions
+            
             for dish in r['menu']:
                 dish['restaurantName'] = r['name']
                 dish['restaurantId'] = r['id']
@@ -1523,6 +1531,87 @@ def get_analytics_data(current_user):
 
     except mysql.connector.Error as err:
         print(f"ERRO DE BANCO DE DADOS em get_analytics_data: {err}")
+        return jsonify({"error": str(err)}), 500
+    
+@app.route('/api/management/promotions', methods=['POST'])
+@token_required(roles=['admin', 'empresa'])
+def create_promotion(current_user):
+    """Cria uma nova promoção para um restaurante."""
+    data = request.get_json()
+    
+    # O ID do restaurante é obrigatório. Para 'empresa', vem do token. Para 'admin', vem do corpo do pedido.
+    restaurant_id = current_user.get('restaurant_id')
+    if current_user['role'] == 'admin':
+        restaurant_id = data.get('restaurantId', restaurant_id)
+
+    if not restaurant_id:
+        return jsonify({"error": "Restaurante não identificado."}), 400
+
+    # Validação dos dados recebidos
+    title = data.get('title')
+    discount_type = data.get('discount_type')
+    discount_value = data.get('discount_value')
+    if not all([title, discount_type, discount_value]):
+        return jsonify({"error": "Título, tipo de desconto e valor são obrigatórios."}), 400
+
+    sql = """
+        INSERT INTO promotions (restaurant_id, title, description, discount_type, discount_value, start_date, end_date, active)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    val = (
+        restaurant_id,
+        title,
+        data.get('description'),
+        discount_type,
+        Decimal(discount_value),
+        data.get('start_date') or None, # Permite datas nulas
+        data.get('end_date') or None,
+        data.get('active', True)
+    )
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(sql, val)
+        conn.commit()
+        new_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Promoção criada com sucesso!", "promotionId": new_id}), 201
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+
+@app.route('/api/management/promotions', methods=['GET'])
+@token_required(roles=['admin', 'empresa'])
+def get_promotions_for_restaurant(current_user):
+    """Busca todas as promoções de um restaurante."""
+    restaurant_id = current_user.get('restaurant_id')
+    if current_user['role'] == 'admin':
+        restaurant_id = request.args.get('restaurant_id', restaurant_id)
+
+    if not restaurant_id:
+        return jsonify({"error": "Restaurante não identificado."}), 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM promotions WHERE restaurant_id = %s ORDER BY created_at DESC", (restaurant_id,))
+        promotions = cursor.fetchall()
+        
+        # Formata datas e decimais para serem compatíveis com JSON
+        for promo in promotions:
+            if isinstance(promo['start_date'], datetime.date):
+                promo['start_date'] = promo['start_date'].isoformat()
+            if isinstance(promo['end_date'], datetime.date):
+                promo['end_date'] = promo['end_date'].isoformat()
+            if isinstance(promo['discount_value'], Decimal):
+                promo['discount_value'] = float(promo['discount_value'])
+
+        cursor.close()
+        conn.close()
+        return jsonify(promotions)
+    except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
 
 # --- Executar a Aplicação ---

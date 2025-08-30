@@ -41,7 +41,34 @@
                 class="mt-6 bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600">
                 Ver Rota
             </button>
-            <section class="my-12">
+            <section v-if="restaurant.promotions && restaurant.promotions.length > 0" class="my-12">
+    <h2 class="section-title mb-6">🎉 Ofertas Especiais Ativas</h2>
+    <div class="space-y-4">
+        <div v-for="promo in restaurant.promotions" :key="promo.id" class="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-lg shadow-sm">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="font-bold text-indigo-800 text-lg">{{ promo.title }}</h3>
+                    <p class="text-indigo-700 text-sm mt-1">{{ promo.description }}</p>
+                </div>
+                <p class="text-xl font-extrabold text-green-600 flex-shrink-0 ml-4">{{ formatDiscount(promo) }}</p>
+            </div>
+        </div>
+    </div>
+</section>
+        </div>
+
+        <AIEncontroSection :restaurant="restaurant" :user-profile="userProfile" :all-users="allUsers"
+            @confirm-encontro="payload => $emit('confirmEncontro', payload)"
+            @open-menu-item-select-modal="payload => $emit('openMenuItemSelectModal', payload)"
+            @open-customize-modal="payload => $emit('openCustomizeModal', payload)"
+            @open-table-select-modal="payload => $emit('openTableSelectModal', payload)" />
+
+        <RestaurantMenu :menu="restaurant.menu" :restaurant-id="restaurant.id"
+            @open-action-modal="dish => $emit('openActionModal', dish)"
+            @open-add-menu-item-modal="category => $emit('openAddDishModal', { restaurant, category })"
+            @delete-dish="dish => $emit('deleteDish', dish)" />
+
+        <section class="my-12">
     <div class="flex justify-between items-center mb-6">
         <h2 class="section-title">Avaliações ({{ restaurant.review_count || 0 }})</h2>
         <button @click="$emit('openAddReviewModal', restaurant)" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">
@@ -49,6 +76,7 @@
         </button>
     </div>
     <div class="bg-white p-6 rounded-lg shadow-lg">
+        
         <div v-if="restaurant.review_count > 0" class="flex items-center gap-2 mb-4 border-b pb-4">
             <span class="text-4xl font-extrabold text-gray-800">{{ restaurant.average_rating.toFixed(1).replace('.', ',') }}</span>
             <div class="flex items-center text-2xl" :title="`${restaurant.average_rating.toFixed(2)} de 5 estrelas`">
@@ -65,18 +93,6 @@
         </div>
     </div>
 </section>
-        </div>
-
-        <AIEncontroSection :restaurant="restaurant" :user-profile="userProfile" :all-users="allUsers"
-            @confirm-encontro="payload => $emit('confirmEncontro', payload)"
-            @open-menu-item-select-modal="payload => $emit('openMenuItemSelectModal', payload)"
-            @open-customize-modal="payload => $emit('openCustomizeModal', payload)"
-            @open-table-select-modal="payload => $emit('openTableSelectModal', payload)" />
-
-        <RestaurantMenu :menu="restaurant.menu" :restaurant-id="restaurant.id"
-            @open-action-modal="dish => $emit('openActionModal', dish)"
-            @open-add-menu-item-modal="category => $emit('openAddDishModal', { restaurant, category })"
-            @delete-dish="dish => $emit('deleteDish', dish)" />
 
     </div>
 </template>
@@ -109,6 +125,13 @@ defineEmits([
     'deleteDish',
     'openAddReviewModal'
 ]);
+
+const formatDiscount = (promo) => {
+    if (promo.discount_type === 'percentage') {
+        return `${Math.round(promo.discount_value)}% OFF`;
+    }
+    return `R$ ${parseFloat(promo.discount_value).toFixed(2).replace('.', ',')} OFF`;
+};
 
 const carouselImages = ref([]);
 const currentImageIndex = ref(0);

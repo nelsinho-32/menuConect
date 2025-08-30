@@ -58,6 +58,14 @@
                 </div>
             </div>
 
+            <div v-if="restaurant.promotions && restaurant.promotions.length > 0"
+                class="absolute bottom-24 md:bottom-20 left-5">
+                <span
+                    class="bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-full shadow-lg animate-pulse gap-1 flex items-center mb-2 ms-4">
+                    🎉 OFERTAS
+                </span>
+            </div>
+
             <div class="flex gap-2 opacity-1 group-hover:opacity-100 transition-opacity duration-300">
                 <button @click.stop.prevent="$emit('requestReservation', restaurant)"
                     class="w-full bg-white/20 backdrop-blur text-white px-4 py-2 rounded-lg font-bold hover:bg-white/30 text-sm">Reservar

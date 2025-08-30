@@ -43,6 +43,12 @@
                 class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
                 <span class="mr-3">📊</span> Análise de Vendas
               </button>
+              <button
+                v-if="authStore.currentUser && (authStore.currentUser.role === 'empresa' || authStore.currentUser.role === 'admin')"
+                @click="navigate('promotions')"
+                class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
+                <span class="mr-3">🎉</span> Gestão de Promoções
+              </button>
               <!-- <button v-if="authStore.currentUser && (authStore.currentUser.role === 'empresa' || authStore.currentUser.role === 'admin')" @click="navigate('dashboard')"
                 class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
                 <span class="mr-3">🏠</span> Dashboard
