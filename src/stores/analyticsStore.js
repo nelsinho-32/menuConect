@@ -8,20 +8,15 @@ export const useAnalyticsStore = defineStore('analytics', () => {
   const state = reactive({
     salesHistory: [],
     topDishes: [],
+    // Adicione um novo estado para a análise de sentimento
+    sentimentAnalysis: { sentiments: [], topics: {} },
     isLoading: false,
     error: null
   });
 
-  // Acedemos à managementStore para saber qual restaurante está a ser gerido
   const managementStore = useManagementStore();
 
   // --- ACTIONS ---
-
-  /**
-   * Busca os dados de análise (histórico de vendas e pratos populares) para o
-   * restaurante gerido atualmente e para um período de tempo específico.
-   * @param {string} period - O período a ser consultado (ex: 'last7days', 'last30days').
-   */
   async function fetchAnalyticsData(period = 'last7days') {
     const restaurantId = managementStore.managedRestaurantId;
     if (!restaurantId) {
@@ -42,6 +37,8 @@ export const useAnalyticsStore = defineStore('analytics', () => {
 
       state.salesHistory = data.sales_history;
       state.topDishes = data.top_dishes;
+      // Preenche o novo estado com os dados da API
+      state.sentimentAnalysis = data.sentiment_analysis || { sentiments: [], topics: {} };
 
     } catch (err) {
       console.error("Erro ao buscar dados de análise:", err.message);

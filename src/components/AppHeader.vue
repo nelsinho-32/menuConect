@@ -31,6 +31,10 @@
                 class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
                 <span class="mr-3">🧾</span> Histórico de Pedidos
               </button>
+              <button @click="navigate('users')"
+                class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
+                <span class="mr-3">👥</span> Encontrar Pessoas
+              </button>
               <button
                 v-if="authStore.currentUser && (authStore.currentUser.role === 'empresa' || authStore.currentUser.role === 'admin')"
                 @click="navigate('dashboard')"
@@ -117,7 +121,8 @@
                   d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2.5a2 2 0 0 0-1.6.8L8 14.333 6.1 11.8a2 2 0 0 0-1.6-.8H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2.5a1 1 0 0 1 .8.4l1.9 2.533a1 1 0 0 0 1.6 0l1.9-2.533a1 1 0 0 1 .8-.4H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z" />
               </svg>
             </button>
-            <FriendsChatPanel :is-open="isFriendsChatOpen" :friends="friends" />
+            <FriendsChatPanel :is-open="isFriendsChatOpen" :friends="friends" :pending-requests="pendingRequests"
+              @accept-friend-request="(requesterId) => $emit('accept-friend-request', requesterId)" />
           </div>
 
           <div class="relative" ref="notificationsContainerRef">
@@ -200,9 +205,10 @@ const props = defineProps({
   isNotificationsOpen: { type: Boolean, default: false },
   isFriendsChatOpen: { type: Boolean, default: false },
   notifications: { type: Array, default: () => [] },
-  friends: { type: Array, default: () => [] }
+  friends: { type: Array, default: () => [] },
+  pendingRequests: { type: Array, default: () => [] }
 });
-const emit = defineEmits(['navigate', 'search-navigate', 'toggleNotifications', 'toggleFriendsChat', 'logout']);
+const emit = defineEmits(['navigate', 'search-navigate', 'toggleNotifications', 'toggleFriendsChat', 'logout', 'accept-friend-request']);
 
 const isMenuOpen = ref(false);
 const menuContainerRef = ref(null);

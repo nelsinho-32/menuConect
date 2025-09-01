@@ -66,8 +66,9 @@
         <RestaurantMenu :menu="restaurant.menu" :restaurant-id="restaurant.id"
             @open-action-modal="dish => $emit('openActionModal', dish)"
             @open-add-menu-item-modal="category => $emit('openAddDishModal', { restaurant, category })"
-            @delete-dish="dish => $emit('deleteDish', dish)" />
-
+            @delete-dish="dish => $emit('deleteDish', dish)"
+            @toggle-availability="item => $emit('toggleAvailability', item)" 
+        />
         <section class="my-12">
     <div class="flex justify-between items-center mb-6">
         <h2 class="section-title">Avaliações ({{ restaurant.review_count || 0 }})</h2>
@@ -112,7 +113,7 @@ const props = defineProps({
     allUsers: { type: Array, required: true },
 });
 
-// O evento 'openAddDishModal' é agora re-emitido para o App.vue com os dados necessários
+// ADICIONE 'toggleAvailability' À LISTA DE EVENTOS
 defineEmits([
     'backToMain', 
     'openActionModal', 
@@ -123,7 +124,8 @@ defineEmits([
     'openTableSelectModal', 
     'viewRoute', 
     'deleteDish',
-    'openAddReviewModal'
+    'openAddReviewModal',
+    'toggleAvailability'
 ]);
 
 const formatDiscount = (promo) => {

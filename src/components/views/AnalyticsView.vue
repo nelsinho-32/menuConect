@@ -35,6 +35,30 @@
             <p>{{ analyticsStore.state.error }}</p>
         </div>
         <div v-else>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                <div class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-lg">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Análise de Sentimento</h2>
+                    <div v-if="sentimentChartData.labels.length > 0" style="height: 250px;">
+                        <PieChart :chart-data="sentimentChartData" />
+                    </div>
+                     <div v-else class="text-center text-gray-400 py-12">
+                        <p>Sem avaliações no período selecionado.</p>
+                    </div>
+                </div>
+                <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Tópicos Mais Comentados</h2>
+                    <div v-if="sortedTopics.length > 0" class="space-y-3">
+                         <div v-for="topic in sortedTopics" :key="topic.name" class="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                            <span class="font-semibold text-gray-800 capitalize">{{ topic.name }}</span>
+                            <span class="font-bold text-indigo-600">{{ topic.count }} mençõe(s)</span>
+                        </div>
+                    </div>
+                    <div v-else class="text-center text-gray-400 py-12">
+                        <p>Nenhum tópico identificado nas avaliações.</p>
+                    </div>
+                </div>
+            </div>
+
             <div class="bg-white p-6 rounded-2xl shadow-lg mb-8">
                 <h2 class="text-xl font-bold text-gray-800 mb-4">Histórico de Vendas (R$)</h2>
                 <div v-if="salesChartData.labels.length > 0" style="height: 350px;">
@@ -72,13 +96,14 @@ import { ref, onMounted, computed, watch } from 'vue';
 import { useAnalyticsStore } from '@/stores/analyticsStore';
 import { useManagementStore } from '@/stores/managementStore';
 import { useRestaurantStore } from '@/stores/restaurantStore';
-import { useAuthStore } from '@/stores/authStore'; // Importa a store de autenticação
+import { useAuthStore } from '@/stores/authStore';
 import BarChart from '../BarChart.vue';
+import PieChart from '../PieChart.vue'; // Importa o novo gráfico
 
 const analyticsStore = useAnalyticsStore();
 const managementStore = useManagementStore();
 const restaurantStore = useRestaurantStore();
-const authStore = useAuthStore(); // Inicializa a store de autenticação
+const authStore = useAuthStore();
 
 const activePeriod = ref('last7days');
 
@@ -86,30 +111,24 @@ const managedRestaurant = computed(() => {
     return restaurantStore.restaurants.find(r => r.id === managementStore.managedRestaurantId);
 });
 
-// INÍCIO DA CORREÇÃO: Função para lidar com a mudança no seletor
 const onRestaurantChange = (event) => {
     const newId = parseInt(event.target.value);
     if (newId) {
-        // Esta ação da managementStore irá atualizar o ID,
-        // e o 'watch' abaixo tratará de buscar os novos dados de análise.
         managementStore.setManagedRestaurant(newId);
     }
 };
 
 onMounted(() => {
-    // Busca os dados iniciais com base no restaurante já selecionado na store
     if (managementStore.managedRestaurantId) {
         analyticsStore.fetchAnalyticsData(activePeriod.value);
     }
 });
 
-// Observa se o ID do restaurante gerido muda e busca novos dados
 watch(() => managementStore.managedRestaurantId, (newId) => {
     if (newId) {
         analyticsStore.fetchAnalyticsData(activePeriod.value);
     }
 });
-// FIM DA CORREÇÃO
 
 const changePeriod = (period) => {
     activePeriod.value = period;
@@ -127,15 +146,41 @@ const salesChartData = computed(() => {
     const history = analyticsStore.state.salesHistory;
     return {
         labels: history.map(item => new Date(item.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })),
-        datasets: [
-            {
-                label: 'Vendas Totais',
-                backgroundColor: '#4f46e5',
-                borderColor: '#4f46e5',
-                data: history.map(item => item.total_sales),
-                borderRadius: 4,
-            }
-        ]
+        datasets: [{
+            label: 'Vendas Totais',
+            backgroundColor: '#4f46e5',
+            borderColor: '#4f46e5',
+            data: history.map(item => item.total_sales),
+            borderRadius: 4,
+        }]
     };
 });
+
+// Computed para formatar os dados de sentimento para o gráfico de pizza
+const sentimentChartData = computed(() => {
+    const sentiments = analyticsStore.state.sentimentAnalysis.sentiments;
+    const dataMap = { 'positivo': 0, 'negativo': 0, 'neutro': 0 };
+    sentiments.forEach(item => {
+        if (dataMap.hasOwnProperty(item.sentiment)) {
+            dataMap[item.sentiment] = item.count;
+        }
+    });
+    
+    return {
+        labels: ['Positivas', 'Negativas', 'Neutras'],
+        datasets: [{
+            backgroundColor: ['#22c55e', '#ef4444', '#a8a29e'], // Verde, Vermelho, Cinza
+            data: [dataMap.positivo, dataMap.negativo, dataMap.neutro]
+        }]
+    };
+});
+
+// Computed para ordenar os tópicos por contagem
+const sortedTopics = computed(() => {
+    const topics = analyticsStore.state.sentimentAnalysis.topics;
+    return Object.entries(topics)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count);
+});
+
 </script>

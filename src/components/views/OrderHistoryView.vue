@@ -51,6 +51,12 @@
                         </div>
                     </div>
                 </div>
+                
+                <div class="border-t mt-4 pt-4 flex justify-end">
+                    <button @click="$emit('reorder', order)" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">
+                        Pedir Novamente
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -61,7 +67,7 @@ import { useOrderStore } from '@/stores/orderStore';
 
 const orderStore = useOrderStore();
 
-defineEmits(['backToMain']);
+defineEmits(['backToMain', 'reorder']);
 
 // Função para formatar a data de forma amigável
 const formatDate = (isoString) => {

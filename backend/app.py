@@ -12,7 +12,7 @@ import json
 
 # --- Configuração ---
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}})
 bcrypt = Bcrypt(app)
 app.config['SECRET_KEY'] = 'esta-e-uma-chave-muito-secreta'
 
@@ -143,7 +143,7 @@ def get_restaurants():
             if r.get('average_rating') is not None:
                 r['average_rating'] = float(r['average_rating'])
             
-            cursor.execute("SELECT id, name AS dishName, description, price, imageUrl, category, restaurant_id FROM dishes WHERE restaurant_id = %s", (r['id'],))
+            cursor.execute("SELECT id, name AS dishName, description, price, imageUrl, category, restaurant_id, is_available FROM dishes WHERE restaurant_id = %s", (r['id'],))
             r['menu'] = cursor.fetchall()
             
             promo_sql = "SELECT id, title, description, discount_type, discount_value FROM promotions WHERE restaurant_id = %s AND active = TRUE AND (end_date IS NULL OR end_date >= CURDATE())"
@@ -1378,49 +1378,6 @@ def start_session_from_reservation(current_user):
             cursor.close()
             conn.close()
             
-@app.route('/api/reviews', methods=['POST'])
-@token_required(roles=['cliente', 'admin']) # Apenas clientes podem deixar avaliações
-def add_review(current_user):
-    """Adiciona uma nova avaliação e recalcula a média do restaurante."""
-    data = request.get_json()
-    restaurant_id = data.get('restaurantId')
-    rating = data.get('rating')
-    comment = data.get('comment')
-
-    if not all([restaurant_id, rating]):
-        return jsonify({"error": "ID do restaurante e avaliação são obrigatórios."}), 400
-    if not 1 <= rating <= 5:
-        return jsonify({"error": "A avaliação deve ser entre 1 e 5."}), 400
-
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-
-        # Insere a nova avaliação
-        sql_insert = "INSERT INTO reviews (restaurant_id, user_id, rating, comment) VALUES (%s, %s, %s, %s)"
-        cursor.execute(sql_insert, (restaurant_id, current_user['id'], rating, comment))
-        
-        # Recalcula a média e a contagem de avaliações
-        sql_update = """
-            UPDATE restaurants r
-            SET 
-                r.average_rating = (SELECT AVG(rating) FROM reviews WHERE restaurant_id = r.id),
-                r.review_count = (SELECT COUNT(*) FROM reviews WHERE restaurant_id = r.id)
-            WHERE r.id = %s
-        """
-        cursor.execute(sql_update, (restaurant_id,))
-        
-        conn.commit()
-        return jsonify({"message": "Avaliação adicionada com sucesso!"}), 201
-
-    except mysql.connector.Error as err:
-        if err.errno == 1062: # Chave duplicada
-            return jsonify({"error": "Você já avaliou este restaurante."}), 409
-        return jsonify({"error": str(err)}), 500
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
 
 @app.route('/api/restaurants/<int:restaurant_id>/reviews', methods=['GET'])
 def get_reviews_for_restaurant(restaurant_id):
@@ -1455,12 +1412,12 @@ def get_reviews_for_restaurant(restaurant_id):
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
     
+
 @app.route('/api/management/analytics', methods=['GET'])
 @token_required(roles=['admin', 'empresa'])
 def get_analytics_data(current_user):
     """
-    Busca dados de análise de vendas para um restaurante num determinado período.
-    Aceita o parâmetro 'period' na query string (ex: 'last7days', 'last30days', 'monthToDate').
+    Busca dados de análise, incluindo vendas, pratos populares e análise de sentimento.
     """
     restaurant_id = current_user.get('restaurant_id')
     if current_user['role'] == 'admin':
@@ -1468,21 +1425,23 @@ def get_analytics_data(current_user):
     if not restaurant_id:
         return jsonify({"error": "Nenhum restaurante associado."}), 403
 
-    period = request.args.get('period', 'last7days') # Padrão para os últimos 7 dias
+    period = request.args.get('period', 'last7days')
 
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
 
-        # --- Lógica para o Histórico de Vendas ---
-        # Define o intervalo de datas com base no período solicitado
         if period == 'last30days':
             date_filter = "o.created_at >= CURDATE() - INTERVAL 30 DAY"
+            review_date_filter = "created_at >= CURDATE() - INTERVAL 30 DAY"
         elif period == 'monthToDate':
             date_filter = "YEAR(o.created_at) = YEAR(CURDATE()) AND MONTH(o.created_at) = MONTH(CURDATE())"
-        else: # Padrão é 'last7days'
+            review_date_filter = "YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE())"
+        else:
             date_filter = "o.created_at >= CURDATE() - INTERVAL 7 DAY"
+            review_date_filter = "created_at >= CURDATE() - INTERVAL 7 DAY"
 
+        # ... (código existente para sales_history e top_dishes)
         sales_history_sql = f"""
             SELECT 
                 DATE(o.created_at) as date, 
@@ -1495,12 +1454,10 @@ def get_analytics_data(current_user):
         cursor.execute(sales_history_sql, (restaurant_id,))
         sales_history = cursor.fetchall()
         
-        # Formata a data para ser facilmente lida pelo JavaScript
         for sale in sales_history:
             sale['date'] = sale['date'].strftime('%Y-%m-%d')
             sale['total_sales'] = float(sale['total_sales'])
 
-        # --- Lógica para os Pratos Mais Rentáveis ---
         top_dishes_sql = f"""
             SELECT 
                 d.name as dishName,
@@ -1517,16 +1474,58 @@ def get_analytics_data(current_user):
         cursor.execute(top_dishes_sql, (restaurant_id,))
         top_dishes = cursor.fetchall()
 
-        # Converte Decimals para floats
         for dish in top_dishes:
             dish['total_revenue'] = float(dish['total_revenue'])
+
+        # --- INÍCIO DA NOVA LÓGICA: ANÁLISE DE SENTIMENTO ---
+        sentiment_sql = f"""
+            SELECT 
+                sentiment, 
+                COUNT(*) as count
+            FROM reviews
+            WHERE restaurant_id = %s AND {review_date_filter} AND sentiment IS NOT NULL
+            GROUP BY sentiment
+        """
+        cursor.execute(sentiment_sql, (restaurant_id,))
+        sentiment_counts = cursor.fetchall()
+
+        topics_sql = f"""
+            SELECT 
+                JSON_UNQUOTE(JSON_EXTRACT(topics, '$[*]')) as topic
+            FROM reviews
+            WHERE restaurant_id = %s AND {review_date_filter} AND JSON_LENGTH(topics) > 0
+        """
+        cursor.execute(topics_sql, (restaurant_id,))
+        topics_results = cursor.fetchall()
+        
+        # Processa os tópicos, que vêm como strings JSON de arrays
+        all_topics = []
+        for row in topics_results:
+            try:
+                # O resultado pode ser uma string como '["comida", "ambiente"]'
+                parsed_topics = json.loads(row['topic'])
+                if isinstance(parsed_topics, list):
+                    all_topics.extend(parsed_topics)
+            except (json.JSONDecodeError, TypeError):
+                continue
+        
+        topic_counts = {}
+        for topic in all_topics:
+            topic_counts[topic] = topic_counts.get(topic, 0) + 1
+
+        sentiment_analysis = {
+            "sentiments": sentiment_counts,
+            "topics": topic_counts
+        }
+        # --- FIM DA NOVA LÓGICA ---
 
         cursor.close()
         conn.close()
         
         return jsonify({
             "sales_history": sales_history,
-            "top_dishes": top_dishes
+            "top_dishes": top_dishes,
+            "sentiment_analysis": sentiment_analysis # Adiciona os novos dados à resposta
         })
 
     except mysql.connector.Error as err:
@@ -1611,6 +1610,281 @@ def get_promotions_for_restaurant(current_user):
         cursor.close()
         conn.close()
         return jsonify(promotions)
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+# --- OTIMIZAÇÃO DE OPERAÇÕES: GESTÃO DE ESTOQUE ---
+
+@app.route('/api/dishes/<int:dish_id>/availability', methods=['PUT'])
+@token_required(roles=['admin', 'empresa'])
+def toggle_dish_availability(current_user, dish_id):
+    """Ativa ou desativa a disponibilidade de um prato."""
+    data = request.get_json()
+    new_status = data.get('is_available')
+
+    if not isinstance(new_status, bool):
+        return jsonify({"error": "O status 'is_available' deve ser um valor booleano (true/false)."}), 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # Verifica se o usuário tem permissão para alterar este prato
+        cursor.execute("SELECT restaurant_id FROM dishes WHERE id = %s", (dish_id,))
+        dish = cursor.fetchone()
+        if not dish:
+            return jsonify({"error": "Prato não encontrado."}), 404
+
+        if current_user['role'] == 'empresa' and dish['restaurant_id'] != current_user.get('restaurant_id'):
+            return jsonify({"error": "Permissão negada para alterar este prato."}), 403
+
+        # Atualiza o status
+        sql = "UPDATE dishes SET is_available = %s WHERE id = %s"
+        cursor.execute(sql, (new_status, dish_id))
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+        return jsonify({"message": f"Disponibilidade do prato atualizada com sucesso para {'disponível' if new_status else 'esgotado'}."})
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+
+# --- ANÁLISES E INSIGHTS: ANÁLISE DE SENTIMENTO ---
+
+@app.route('/api/reviews', methods=['POST'])
+@token_required(roles=['cliente', 'admin']) 
+def add_review(current_user):
+    """Adiciona uma nova avaliação, analisa o sentimento e recalcula a média."""
+    data = request.get_json()
+    restaurant_id = data.get('restaurantId')
+    rating = data.get('rating')
+    comment = data.get('comment', '') # Garante que o comentário seja uma string
+
+    if not all([restaurant_id, rating]):
+        return jsonify({"error": "ID do restaurante e avaliação são obrigatórios."}), 400
+    if not 1 <= rating <= 5:
+        return jsonify({"error": "A avaliação deve ser entre 1 e 5."}), 400
+
+    # --- INÍCIO DA LÓGICA DE ANÁLISE DE SENTIMENTO (SIMULADA) ---
+    sentiment = 'neutro'
+    if rating >= 4:
+        sentiment = 'positivo'
+    elif rating <= 2:
+        sentiment = 'negativo'
+
+    topics = []
+    comment_lower = comment.lower()
+    topic_keywords = {
+        "atendimento": ["serviço", "atendente", "garçom", "garçonete", "demora", "rapidez", "atenciosos"],
+        "comida": ["sabor", "delicioso", "prato", "qualidade", "ingredientes", "saboroso", "ruim", "frio"],
+        "ambiente": ["lugar", "espaço", "decoração", "música", "confortável", "barulho", "limpeza"],
+        "preço": ["caro", "barato", "custo", "valor", "preço justo"]
+    }
+    for topic, keywords in topic_keywords.items():
+        if any(keyword in comment_lower for keyword in keywords):
+            topics.append(topic)
+    
+    topics_json = json.dumps(topics)
+    # --- FIM DA LÓGICA DE ANÁLISE DE SENTIMENTO ---
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        # Insere a nova avaliação com os dados de sentimento
+        sql_insert = "INSERT INTO reviews (restaurant_id, user_id, rating, comment, sentiment, topics) VALUES (%s, %s, %s, %s, %s, %s)"
+        cursor.execute(sql_insert, (restaurant_id, current_user['id'], rating, comment, sentiment, topics_json))
+        
+        # Recalcula a média e a contagem de avaliações
+        sql_update = """
+            UPDATE restaurants r
+            SET 
+                r.average_rating = (SELECT AVG(rating) FROM reviews WHERE restaurant_id = r.id),
+                r.review_count = (SELECT COUNT(*) FROM reviews WHERE restaurant_id = r.id)
+            WHERE r.id = %s
+        """
+        cursor.execute(sql_update, (restaurant_id,))
+        
+        conn.commit()
+        return jsonify({"message": "Avaliação adicionada com sucesso!"}), 201
+
+    except mysql.connector.Error as err:
+        if err.errno == 1062: # Chave duplicada
+            return jsonify({"error": "Você já avaliou este restaurante."}), 409
+        return jsonify({"error": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+            
+# --- NOVAS ROTAS: FUNCIONALIDADES SOCIAIS (AMIGOS) ---
+
+@app.route('/api/friends', methods=['GET'])
+@token_required()
+def get_friends(current_user):
+    """Busca amigos, pedidos pendentes recebidos e enviados."""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        user_id = current_user['id']
+
+        # Amigos aceites (onde o user_id é follower ou followed)
+        friends_sql = """
+            SELECT u.id, u.name, u.avatarUrl 
+            FROM friendships f
+            JOIN users u ON u.id = IF(f.follower_id = %s, f.followed_id, f.follower_id)
+            WHERE (%s IN (f.follower_id, f.followed_id)) AND f.status = 'accepted'
+        """
+        cursor.execute(friends_sql, (user_id, user_id))
+        friends = cursor.fetchall()
+
+        # Pedidos pendentes recebidos (alguém enviou para o usuário atual)
+        pending_sql = """
+            SELECT u.id, u.name, u.avatarUrl 
+            FROM friendships f
+            JOIN users u ON u.id = f.follower_id
+            WHERE f.followed_id = %s AND f.status = 'pending'
+        """
+        cursor.execute(pending_sql, (user_id,))
+        pending_requests = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            "friends": friends,
+            "pendingRequests": pending_requests
+        })
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+
+@app.route('/api/friends/request/<int:friend_id>', methods=['POST'])
+@token_required()
+def send_friend_request(current_user, friend_id):
+    """Envia um pedido de amizade ou aceita um pedido existente se for mútuo."""
+    follower_id = current_user['id']
+    if follower_id == friend_id:
+        return jsonify({"error": "Você não pode adicionar a si mesmo."}), 400
+
+    # Ordena os IDs para garantir consistência no banco de dados
+    # O ID menor é sempre o 'follower_id' na tabela
+    user1 = min(follower_id, friend_id)
+    user2 = max(follower_id, friend_id)
+
+    # Tenta inserir um novo pedido de amizade
+    sql_insert = "INSERT INTO friendships (follower_id, followed_id, status) VALUES (%s, %s, 'pending')"
+    
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(sql_insert, (user1, user2))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Pedido de amizade enviado!"}), 201
+    
+    except mysql.connector.Error as err:
+        # Erro de "Entrada Duplicada" (código 1062)
+        if err.errno == 1062:
+            # Se a inserção falhou, significa que já existe um pedido.
+            # Agora, vamos atualizá-lo para 'accepted'.
+            try:
+                conn_update = mysql.connector.connect(**db_config)
+                cursor_update = conn_update.cursor()
+                sql_update = "UPDATE friendships SET status = 'accepted' WHERE follower_id = %s AND followed_id = %s AND status = 'pending'"
+                cursor_update.execute(sql_update, (user1, user2))
+                conn_update.commit()
+                
+                # Se nenhuma linha foi atualizada, significa que eles já são amigos.
+                if cursor_update.rowcount == 0:
+                    cursor_update.close()
+                    conn_update.close()
+                    return jsonify({"message": "Vocês já são amigos.", "status": "accepted"}), 200
+
+                cursor_update.close()
+                conn_update.close()
+                return jsonify({"message": "Amizade aceite mutuamente!", "status": "accepted"}), 200
+            
+            except mysql.connector.Error as update_err:
+                 return jsonify({"error": str(update_err)}), 500
+        
+        # Outros erros de banco de dados
+        return jsonify({"error": str(err)}), 500
+
+@app.route('/api/friends/accept/<int:requester_id>', methods=['PUT'])
+@token_required()
+def accept_friend_request(current_user, requester_id):
+    """Aceita um pedido de amizade."""
+    current_user_id = current_user['id']
+    
+    user1 = min(current_user_id, requester_id)
+    user2 = max(current_user_id, requester_id)
+
+    sql = "UPDATE friendships SET status = 'accepted' WHERE follower_id = %s AND followed_id = %s AND status = 'pending'"
+    
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(sql, (user1, user2))
+        conn.commit()
+        
+        if cursor.rowcount == 0:
+            return jsonify({"error": "Pedido de amizade não encontrado ou já aceite."}), 404
+
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Amizade aceite!"})
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+# --- NOVAS ROTAS: FUNCIONALIDADES SOCIAIS (BUSCAR UTILIZADORES) ---
+
+@app.route('/api/users', methods=['GET'])
+@token_required()
+def get_all_users(current_user):
+    """Lista todos os usuários, exceto o próprio usuário logado."""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id, name, avatarUrl, city, uf FROM users WHERE id != %s", (current_user['id'],))
+        users = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify(users)
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+@app.route('/api/users/<int:user_id>', methods=['GET'])
+@token_required()
+def get_user_profile(current_user, user_id):
+    """Busca o perfil público de um usuário específico."""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        
+        # Busca os dados do usuário
+        cursor.execute("SELECT id, name, avatarUrl, city, uf FROM users WHERE id = %s", (user_id,))
+        user_profile = cursor.fetchone()
+        
+        if not user_profile:
+            return jsonify({"error": "Usuário não encontrado."}), 404
+
+        # Verifica o status de amizade
+        user1 = min(current_user['id'], user_id)
+        user2 = max(current_user['id'], user_id)
+        cursor.execute("SELECT status FROM friendships WHERE follower_id = %s AND followed_id = %s", (user1, user2))
+        friendship = cursor.fetchone()
+        
+        user_profile['friendship_status'] = friendship['status'] if friendship else 'none'
+
+        cursor.close()
+        conn.close()
+        return jsonify(user_profile)
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
 

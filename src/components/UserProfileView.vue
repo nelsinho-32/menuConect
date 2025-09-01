@@ -1,8 +1,12 @@
 <template>
     <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <button @click="$emit('backToMain')" class="mb-6 text-indigo-600 font-semibold hover:underline">&lt; Voltar para a página principal</button>
+        <button @click="$emit('backToMain')" class="mb-6 text-indigo-600 font-semibold hover:underline">&lt; Voltar</button>
         
-        <div class="bg-white rounded-2xl shadow-lg p-8 max-w-2xl mx-auto">
+        <div v-if="isLoading" class="text-center p-10">
+            <p>A carregar perfil...</p>
+        </div>
+        
+        <div v-else-if="profileData" class="bg-white rounded-2xl shadow-lg p-8 max-w-2xl mx-auto">
             <div class="flex flex-col sm:flex-row items-center gap-6">
                 <div class="relative group">
                     <img :src="editableUser.avatarUrl || 'https://placehold.co/256x256/cccccc/ffffff?text=?'" class="w-32 h-32 rounded-full ring-4 ring-indigo-100 object-cover">
@@ -16,17 +20,17 @@
                     <h1 v-if="!isEditing" class="text-3xl font-bold text-gray-800">{{ editableUser.name }}</h1>
                     <input v-else type="text" v-model="editableUser.name" class="text-3xl font-bold text-gray-800 border-b-2 border-indigo-200 focus:outline-none focus:border-indigo-500 w-full">
                     
-                    <p v-if="!isEditing" class="text-gray-500">{{ editableUser.email }}</p>
-                    <input v-else type="email" v-model="editableUser.email" class="text-gray-500 border-b-2 border-indigo-200 focus:outline-none focus:border-indigo-500 mt-1 w-full">
+                    <p v-if="!isEditing && isMyProfile" class="text-gray-500">{{ editableUser.email }}</p>
+                    <input v-if="isEditing" type="email" v-model="editableUser.email" class="text-gray-500 border-b-2 border-indigo-200 focus:outline-none focus:border-indigo-500 mt-1 w-full">
                 </div>
             </div>
 
             <div class="border-t my-8"></div>
 
             <div>
-                <h2 class="text-xl font-bold text-gray-700 mb-4">Informações de Contato</h2>
+                <h2 class="text-xl font-bold text-gray-700 mb-4">Informações</h2>
                 <div class="space-y-4">
-                    <div class="flex items-center">
+                     <div class="flex items-center" v-if="isMyProfile">
                         <span class="w-24 text-gray-500 font-semibold flex-shrink-0">Telefone</span>
                         <p v-if="!isEditing" class="text-gray-800">{{ editableUser.phone || 'Não informado' }}</p>
                         <input v-else type="tel" v-model="editableUser.phone" class="text-gray-800 border-b-2 border-indigo-200 focus:outline-none focus:border-indigo-500 flex-1">
@@ -42,30 +46,24 @@
                 </div>
             </div>
 
-            <div class="border-t my-8"></div>
-
-            <div>
-                <h2 class="text-xl font-bold text-gray-700 mb-4">Preferências de Culinária</h2>
-                <div v-if="!isEditing" class="flex flex-wrap gap-2">
-                    <span v-if="!editableUser.preferences || editableUser.preferences.length === 0" class="text-gray-500 text-sm">Nenhuma preferência adicionada.</span>
-                    <span v-for="pref in editableUser.preferences" :key="pref" class="bg-indigo-100 text-indigo-700 text-sm font-medium px-3 py-1 rounded-full">{{ pref }}</span>
-                </div>
-                <div v-else>
-                    <input type="text" @keydown.enter.prevent="addPreference" placeholder="Adicione uma preferência e pressione Enter" class="w-full border-b-2 border-indigo-200 focus:outline-none focus:border-indigo-500">
-                    <div class="flex flex-wrap gap-2 mt-2">
-                        <span v-for="(pref, index) in editableUser.preferences" :key="pref" class="bg-indigo-100 text-indigo-700 text-sm font-medium px-3 py-1 rounded-full flex items-center">
-                            {{ pref }}
-                            <button @click="removePreference(index)" class="ml-2 text-indigo-500 hover:text-indigo-800 text-lg leading-none">&times;</button>
-                        </span>
-                    </div>
-                </div>
-            </div>
-
             <div class="border-t mt-8 pt-6 flex justify-end gap-4">
-                <button v-if="!isEditing" @click="isEditing = true" class="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700">Editar Perfil</button>
+                <template v-if="isMyProfile">
+                    <button v-if="!isEditing" @click="isEditing = true" class="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700">Editar Perfil</button>
+                    <template v-else>
+                        <button @click="cancelEdit" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-bold hover:bg-gray-300">Cancelar</button>
+                        <button @click="saveProfile" class="bg-green-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-600">Salvar Alterações</button>
+                    </template>
+                </template>
                 <template v-else>
-                    <button @click="cancelEdit" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-bold hover:bg-gray-300">Cancelar</button>
-                    <button @click="saveProfile" class="bg-green-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-600">Salvar Alterações</button>
+                    <button v-if="profileData.friendship_status === 'none'" @click="$emit('sendFriendRequest', profileData.id)" class="bg-blue-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-600">
+                        Adicionar Amigo
+                    </button>
+                    <button v-if="profileData.friendship_status === 'pending'" class="bg-yellow-500 text-white px-6 py-2 rounded-lg font-bold cursor-not-allowed" disabled>
+                        Pedido Enviado
+                    </button>
+                    <span v-if="profileData.friendship_status === 'accepted'" class="bg-green-100 text-green-800 px-6 py-2 rounded-lg font-semibold flex items-center gap-2">
+                        ✔️ Amigos
+                    </span>
                 </template>
             </div>
         </div>
@@ -73,33 +71,39 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
+import { useAuthStore } from '@/stores/authStore';
+import { useUsersStore } from '@/stores/usersStore';
 
 const props = defineProps({
-    user: { type: Object, required: true }
+    userId: { type: Number, default: null }
 });
-const emit = defineEmits(['updateUser', 'backToMain']);
+const emit = defineEmits(['updateUser', 'backToMain', 'sendFriendRequest']);
+
+const authStore = useAuthStore();
+const usersStore = useUsersStore();
 
 const isEditing = ref(false);
-const editableUser = reactive({
-    name: '',
-    email: '',
-    phone: '',
-    city: '',
-    uf: '',
-    avatarUrl: '',
-    preferences: []
+const editableUser = reactive({});
+
+const isMyProfile = computed(() => !props.userId || authStore.currentUser.id === props.userId);
+const isLoading = computed(() => usersStore.state.isLoading);
+
+const profileData = computed(() => {
+    return isMyProfile.value ? authStore.currentUser : usersStore.state.viewedUserProfile;
 });
 
-// Sincroniza o estado local com as props quando elas mudam
-watch(() => props.user, (newUser) => {
-    if (newUser) {
-        Object.assign(editableUser, JSON.parse(JSON.stringify(newUser)));
-        if (!editableUser.preferences) {
-            editableUser.preferences = [];
-        }
+watch(profileData, (newProfile) => {
+    if (newProfile) {
+        Object.assign(editableUser, JSON.parse(JSON.stringify(newProfile)));
     }
 }, { immediate: true, deep: true });
+
+onMounted(() => {
+    if (!isMyProfile.value) {
+        usersStore.fetchUserProfile(props.userId);
+    }
+});
 
 const locationString = computed(() => {
     if (editableUser.city && editableUser.uf) return `${editableUser.city}, ${editableUser.uf.toUpperCase()}`;
@@ -117,26 +121,13 @@ const handleAvatarUpload = (event) => {
     reader.readAsDataURL(file);
 };
 
-const addPreference = (event) => {
-    const newPref = event.target.value.trim();
-    if (newPref && !editableUser.preferences.includes(newPref)) {
-        editableUser.preferences.push(newPref);
-    }
-    event.target.value = '';
-};
-
-const removePreference = (index) => {
-    editableUser.preferences.splice(index, 1);
-};
-
 const saveProfile = () => {
     emit('updateUser', JSON.parse(JSON.stringify(editableUser)));
     isEditing.value = false;
 };
 
 const cancelEdit = () => {
-    // Restaura os dados originais da prop
-    Object.assign(editableUser, JSON.parse(JSON.stringify(props.user)));
+    Object.assign(editableUser, JSON.parse(JSON.stringify(profileData.value)));
     isEditing.value = false;
 };
 </script>

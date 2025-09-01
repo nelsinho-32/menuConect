@@ -145,6 +145,35 @@ export const useRestaurantStore = defineStore('restaurants', () => {
     }
   }
 
+   /**
+   * NOVO: Ativa ou desativa a disponibilidade de um prato.
+   */
+  async function toggleDishAvailability(dish) {
+    try {
+      const response = await apiClient(`/dishes/${dish.id}/availability`, {
+        method: 'PUT',
+        body: JSON.stringify({ is_available: !dish.is_available })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao alterar a disponibilidade.');
+      }
+      // Atualiza o estado localmente para uma resposta visual imediata
+      const restaurant = restaurants.find(r => r.id === dish.restaurantId);
+      if (restaurant) {
+        const dishToUpdate = restaurant.menu.find(d => d.id === dish.id);
+        if (dishToUpdate) {
+          dishToUpdate.is_available = !dishToUpdate.is_available;
+        }
+      }
+      return true;
+    } catch (error) {
+      console.error("Erro ao alterar disponibilidade:", error.message);
+      return Promise.reject(error.message);
+    }
+  }
+
+
   /**
    * Busca todas as avaliações para um restaurante específico.
    */
@@ -200,5 +229,6 @@ export const useRestaurantStore = defineStore('restaurants', () => {
     deleteDish, 
     fetchReviewsForRestaurant,
     submitReview,  
+    toggleDishAvailability
   };
 });

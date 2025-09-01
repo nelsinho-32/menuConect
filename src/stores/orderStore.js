@@ -27,17 +27,18 @@ export const useOrderStore = defineStore('orders', () => {
     }
   }
 
-  /**
+/**
    * Cria um novo pedido a partir dos itens do carrinho.
    */
-  async function createOrder(cartItems, totalPrice, reservationId = null) {
+  async function createOrder(cartItems, totalPrice, reservationId = null, splitDetails = null) {
     try {
       const response = await apiClient('/orders', {
         method: 'POST',
         body: JSON.stringify({ 
           cartItems, 
           totalPrice, 
-          reservationId
+          reservationId,
+          split_details: splitDetails // Adiciona os detalhes da divisão
         })
       });
 

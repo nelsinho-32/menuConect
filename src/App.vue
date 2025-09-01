@@ -24,6 +24,8 @@ import RegisterView from './components/views/RegisterView.vue';
 import ManagementView from './components/views/ManagementView.vue';
 import AnalyticsView from './components/views/AnalyticsView.vue';
 import PromotionsView from './components/views/PromotionsView.vue';
+import FriendsChatPanel from './components/FriendsChatPanel.vue';
+import UsersView from './components/views/UsersView.vue';
 
 // Modais
 import ActionModal from './components/ActionModal.vue';
@@ -46,6 +48,7 @@ import DeleteConfirmationModal from './components/DeleteConfirmationModal.vue';
 import ReservationDetailModal from './components/ReservationDetailModal.vue';
 import AddReviewModal from './components/AddReviewModal.vue';
 import PromotionModal from './components/PromotionModal.vue';
+import SplitBillModal from './components/SplitBillModal.vue';
 
 // 1. IMPORTAÇÃO DAS STORES DO PINIA
 import { useRestaurantStore } from './stores/restaurantStore';
@@ -60,6 +63,8 @@ import { useManagementStore } from './stores/managementStore';
 import { useSessionStore } from './stores/sessionStore';
 import { useAnalyticsStore } from './stores/analyticsStore';
 import { usePromotionStore } from './stores/promotionsStore';
+import { useFriendStore } from './stores/friendStore';
+import { useUsersStore } from './stores/usersStore';
 
 // 2. Ativação das stores para usar no componente
 const restaurantStore = useRestaurantStore();
@@ -74,6 +79,8 @@ const managementStore = useManagementStore();
 const sessionStore = useSessionStore();
 const analyticsStore = useAnalyticsStore();
 const promotionStore = usePromotionStore();
+const friendStore = useFriendStore();
+const usersStore = useUsersStore();
 
 // --- ESTADO REATIVO (EXISTENTE) ---
 const cart = reactive([]);
@@ -118,6 +125,8 @@ const reservationForDetailModal = ref(null);
 const isAddReviewModalOpen = ref(false);
 const restaurantToReview = ref(null);
 const isPromotionModalOpen = ref(false);
+const isSplitBillModalOpen = ref(false);
+const splitDetails = ref(null);
 // Dados mockados que serão substituídos por dados reais da API
 const allUsers = reactive([]);
 const notifications = reactive([]);
@@ -194,7 +203,9 @@ const loadInitialUserData = async () => {
         await Promise.all([
             userDataStore.fetchAllUserData(),
             reservationStore.fetchAllUserReservations(),
-            orderStore.fetchHistory() // <-- ADICIONE ESTA LINHA
+            orderStore.fetchHistory(),
+            friendStore.fetchFriendsData(),
+            usersStore.fetchAllUsers()
         ]);
     } catch (error) {
         console.error("Ocorreu um erro ao carregar os dados iniciais:", error);
@@ -253,11 +264,12 @@ const showToast = (message, type = 'success') => {
 };
 
 const goToView = (name, data = null) => {
-    if (['home', 'restaurants', 'dishes', 'login', 'register'].includes(viewState.name)) {
+    // Mantém um registo da vista anterior para o botão "Voltar"
+    if (['home', 'restaurants', 'dishes', 'users', 'login', 'register'].includes(viewState.name)) {
         previousViewState.value = viewState.name;
     }
     viewState.name = name;
-    viewState.data = data;
+    viewState.data = data; // Apenas guarda o nome da vista e os dados (que podem ser um ID ou null)
     window.scrollTo(0, 0);
 };
 
@@ -266,6 +278,18 @@ const handleRegister = async (credentials) => {
         await authStore.register(credentials);
         showToast('Registo bem-sucedido! Por favor, faça login.');
         goToView('login');
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
+    }
+};
+
+const handleSendFriendRequest = async (userId) => {
+    try {
+        await friendStore.sendFriendRequest(userId);
+        showToast("Pedido de amizade enviado!");
+        // Recarrega o perfil para atualizar o status do botão
+        await usersStore.fetchUserProfile(userId);
+        viewState.data = usersStore.state.viewedUserProfile;
     } catch (errorMsg) {
         showToast(errorMsg, 'error');
     }
@@ -292,6 +316,18 @@ const handleLogin = async (credentials) => {
     }
 };
 
+const openSplitBillModal = () => {
+    isPaymentModalOpen.value = false; // Fecha o modal de pagamento
+    isSplitBillModalOpen.value = true;
+};
+
+const handleConfirmSplit = (details) => {
+    splitDetails.value = details; // Guarda os detalhes da divisão
+    isSplitBillModalOpen.value = false;
+    isPaymentModalOpen.value = true; // Reabre o modal de pagamento
+    showToast(`Conta dividida por ${details.people}. Valor por pessoa: R$ ${details.amountPerPerson.toFixed(2).replace('.', ',')}`);
+};
+
 const handleChangeTableStatus = async (newStatus) => {
     if (!tableToManage.value || !restaurantForModal.value) return;
 
@@ -309,6 +345,17 @@ const handleChangeTableStatus = async (newStatus) => {
         console.error("Erro ao mudar o status da mesa:", errorMsg);
     }
 };
+
+const handleAcceptFriendRequest = async (requesterId) => {
+    try {
+        await friendStore.acceptFriendRequest(requesterId);
+        showToast("Amizade aceite com sucesso!");
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
+    }
+};
+
+
 
 const onAddOrderToSession = (payload) => {
     sessionForModal.value = payload.session;
@@ -884,7 +931,9 @@ const handlePaymentSuccess = async () => {
             }
         }
 
-        await orderStore.createOrder(cart, finalTotal, reservationIdParaPedido);
+        await orderStore.createOrder(cart, finalTotal, reservationIdParaPedido, splitDetails.value);
+
+        splitDetails.value = null; // Limpa os detalhes após o pedido
 
         cart.length = 0;
         closePaymentModal();
@@ -969,11 +1018,41 @@ const sendWhatsAppConfirmation = (reservationDetails) => {
     showToast("Confirmação enviada para o WhatsApp!");
 };
 
+const handleReorder = (order) => {
+    order.items.forEach(item => {
+        const dish = {
+            id: item.dish_id,
+            dishName: item.dishName,
+            price: item.price_at_time,
+            imageUrl: item.dishImage,
+            restaurantName: order.restaurantName,
+            restaurantId: order.restaurant_id
+        };
+        addToCart({
+            dish: dish,
+            quantity: item.quantity,
+            customization: item.customization,
+            dineOption: 'delivery' // Ou a lógica que preferir
+        });
+    });
+    goToView('cart');
+};
+
+
 const handleWaitingList = async ({ restaurant }) => {
     try {
         await reservationStore.joinWaitlist(restaurant.id);
         showToast(`Você entrou na fila de espera de ${restaurant.name}.`);
         goToView('myReservations');
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
+    }
+};
+
+const handleToggleAvailability = async (item) => {
+    try {
+        await restaurantStore.toggleDishAvailability(item);
+        showToast(`'${item.dishName}' foi marcado como ${item.is_available ? 'disponível' : 'esgotado'}.`);
     } catch (errorMsg) {
         showToast(errorMsg, 'error');
     }
@@ -1054,7 +1133,8 @@ const closeCustomizeModal = () => {
                 :notifications="notifications" :friends="friends" @navigate="goToView" @logout="handleLogout"
                 @search-navigate="handleSearchNavigation"
                 @toggle-notifications="isNotificationsOpen = !isNotificationsOpen"
-                @toggle-friends-chat="isFriendsChatOpen = !isFriendsChatOpen" />
+                @toggle-friends-chat="isFriendsChatOpen = !isFriendsChatOpen"
+                @accept-friend-request="handleAcceptFriendRequest" />
 
             <main>
                 <HomeView v-if="viewState.name === 'home'" :restaurants="restaurantStore.featuredRestaurants"
@@ -1081,7 +1161,8 @@ const closeCustomizeModal = () => {
                     @open-action-modal="openActionModal" @open-add-dish-modal="openAddDishModal"
                     @confirm-encontro="handleConfirmEncontro" @open-menu-item-select-modal="openSelectMenuItemModal"
                     @open-customize-modal="openCustomizeModal" @view-route="handleViewRoute"
-                    @delete-dish="openDeleteDishModal" @open-add-review-modal="onOpenAddReviewModal" />
+                    @delete-dish="openDeleteDishModal" @open-add-review-modal="onOpenAddReviewModal"
+                    @toggle-availability="handleToggleAvailability" />
                 <RouteView v-if="viewState.name === 'route'" :restaurant="viewState.data" @back="goBack" />
                 <ReservationView v-if="viewState.name === 'reservation'" :restaurant="viewState.data"
                     :user-reservations="reservationStore.userReservations.booked" @back-to-main="goBack"
@@ -1091,8 +1172,6 @@ const closeCustomizeModal = () => {
                     :reservations="reservationStore.userReservations" @cancel-reservation="handleCancellation"
                     @confirm-reservation="handleConfirmReservation" @back-to-main="goBack"
                     @cancel-waitlist="handleCancelWaitlist" />
-                <UserProfileView v-if="viewState.name === 'userProfile'" :user="userProfile"
-                    @update-user="handleUpdateUser" @back-to-main="goBack" />
                 <CartView v-if="viewState.name === 'cart'" :cart-items="cart" :all-dishes="restaurantStore.allDishes"
                     @update-quantity="updateQuantity" @remove-from-cart="removeFromCart" @add-to-cart="addToCart"
                     @back-to-main="goBack" @checkout="openCheckout" @edit-item="openCustomizeModal"
@@ -1106,7 +1185,7 @@ const closeCustomizeModal = () => {
                     @toggle-favorite="toggleDishFavorite" @open-action-modal="openActionModal"
                     @open-dine-options="openDineOptionsModal" @back-to-main="goToView('home')" />
                 <OrderHistoryView v-if="viewState.name === 'orderHistory'" :order-history="orderHistory"
-                    @back-to-main="goToView('home')" />
+                    @back-to-main="goToView('home')" @reorder="handleReorder" />
                 <!-- <TableManagementView v-if="viewState.name === 'tableManagement'" :order-history="orderHistory"
                     @open-table-detail-modal="openTableDetailModal" /> -->
                 <ManagementView v-if="viewState.name === 'dashboard'"
@@ -1121,6 +1200,10 @@ const closeCustomizeModal = () => {
                     :restaurant="viewState.data.restaurant" @back-to-main="goToView('home')"
                     @open-menu-item-select-modal="openSelectMenuItemModal" />
                 <PromotionsView v-if="viewState.name === 'promotions'" @open-promotion-modal="onOpenPromotionModal" />
+                <UserProfileView v-if="viewState.name === 'userProfile'" :user-id="viewState.data"
+                    @update-user="handleUpdateUser" @back-to-main="goBack"
+                    @send-friend-request="handleSendFriendRequest" />
+                <UsersView v-if="viewState.name === 'users'" @viewProfile="id => goToView('userProfile', id)" />
             </main>
 
             <Footer />
@@ -1138,7 +1221,8 @@ const closeCustomizeModal = () => {
                 @close-modal="closeDineOptionsModal" @dine-in="handleDineInOrTakeout" @takeout="handleDineInOrTakeout"
                 @reserve="handleGoToReservation" />
             <PaymentModal v-if="isPaymentModalOpen" :cart="cart" :shortcut="paymentShortcut"
-                @close-modal="closePaymentModal" @payment-success="handlePaymentSuccess" />
+                @close-modal="closePaymentModal" @payment-success="handlePaymentSuccess"
+                @open-split-bill="openSplitBillModal" />
             <PixModal v-if="isPixModalOpen" :cart="cart" @close="closePixModal"
                 @payment-success="handlePaymentSuccess" />
             <ConfirmationModal v-if="isConfirmationModalOpen" :message="confirmationModalMessage"
@@ -1172,6 +1256,9 @@ const closeCustomizeModal = () => {
                 @close="isAddReviewModalOpen = false" @submit-review="handleReviewSubmit" />
             <PromotionModal v-if="isPromotionModalOpen" @close="isPromotionModalOpen = false"
                 @create-promotion="handleCreatePromotion" />
+            <SplitBillModal v-if="isSplitBillModalOpen"
+                :total="cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)"
+                @close="isSplitBillModalOpen = false" @confirm="handleConfirmSplit" />
             <div
                 :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
                 {{ toastMessage }}
