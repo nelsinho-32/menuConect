@@ -833,11 +833,13 @@ def create_order(current_user):
     cart_items = data.get('cartItems')
     total_price = data.get('totalPrice')
     reservation_id = data.get('reservationId')
+    # --- INÍCIO DA ALTERAÇÃO ---
+    split_details = data.get('split_details') # Captura os detalhes da divisão
+    # --- FIM DA ALTERAÇÃO ---
     
     if not cart_items or not total_price:
         return jsonify({"error": "Dados do pedido incompletos."}), 400
 
-    # Agrupa os itens por restaurante para criar um pedido para cada um
     orders_by_restaurant = {}
     for item in cart_items:
         restaurant_id = item.get('restaurantId')
@@ -851,12 +853,17 @@ def create_order(current_user):
         cursor = conn.cursor()
 
         for restaurant_id, order_data in orders_by_restaurant.items():
-            # 1. Cria a entrada principal na tabela 'orders'
-            order_sql = "INSERT INTO orders (user_id, restaurant_id, total_price, reservation_id) VALUES (%s, %s, %s, %s)"
-            cursor.execute(order_sql, (current_user['id'], restaurant_id, order_data['subtotal'], reservation_id))
+            # --- INÍCIO DA ALTERAÇÃO ---
+            # Converte o dicionário de divisão para uma string JSON para guardar no banco
+            split_details_json = json.dumps(split_details) if split_details else None
+
+            # Adiciona a coluna e o valor à query SQL
+            order_sql = "INSERT INTO orders (user_id, restaurant_id, total_price, reservation_id, split_details) VALUES (%s, %s, %s, %s, %s)"
+            cursor.execute(order_sql, (current_user['id'], restaurant_id, order_data['subtotal'], reservation_id, split_details_json))
+            # --- FIM DA ALTERAÇÃO ---
+            
             order_id = cursor.lastrowid
 
-            # 2. Insere cada item do pedido na tabela 'order_items'
             for item in order_data['items']:
                 item_sql = "INSERT INTO order_items (order_id, dish_id, quantity, price_at_time, customization) VALUES (%s, %s, %s, %s, %s)"
                 customization_json = json.dumps(item.get('customization')) if item.get('customization') else None

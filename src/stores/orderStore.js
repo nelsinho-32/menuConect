@@ -38,7 +38,7 @@ export const useOrderStore = defineStore('orders', () => {
           cartItems, 
           totalPrice, 
           reservationId,
-          split_details: splitDetails // Adiciona os detalhes da divisão
+          split_details: splitDetails // Adiciona o campo para o backend
         })
       });
 
@@ -46,7 +46,6 @@ export const useOrderStore = defineStore('orders', () => {
       if (!response.ok) {
         throw new Error(data.error || 'Falha ao criar o pedido.');
       }
-      // Após criar um novo pedido, atualiza o histórico
       await fetchHistory();
       return true;
     } catch (error) {
