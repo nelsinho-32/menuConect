@@ -19,6 +19,10 @@
                 class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
                 <span class="mr-3">📅</span> Minhas Reservas
               </button>
+              <button @click="navigate('myLists')"
+                class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
+                <span class="mr-3">📋</span> Minhas Listas
+              </button>
               <button @click="navigate('favoriteRestaurants')"
                 class="w-full text-left flex items-center px-4 py-2 text-gray-700 hover:bg-indigo-50">
                 <span class="mr-3">⭐</span> Restaurantes Favoritos

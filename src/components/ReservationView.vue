@@ -1,6 +1,7 @@
 <template>
     <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <button @click="$emit('backToMain')" class="mb-6 text-indigo-600 font-semibold hover:underline">&lt; Voltar para a página principal</button>
+        <button @click="$emit('backToMain')" class="mb-6 text-indigo-600 font-semibold hover:underline">&lt; Voltar para
+            a página principal</button>
 
         <div class="flex justify-between items-center mb-4">
             <div>
@@ -8,17 +9,21 @@
                 <p class="text-gray-500">Selecione uma mesa no mapa abaixo ou edite a disposição.</p>
             </div>
             <div class="flex flex-wrap gap-2">
-                <button v-if="!isEditMode && canEditMap" @click="toggleEditMode" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">
+                <button v-if="!isEditMode && canEditMap" @click="toggleEditMode"
+                    class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">
                     ✏️ Editar Mapa
                 </button>
                 <template v-if="isEditMode">
-                    <button @click="cycleFloorPattern" class="bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600">
+                    <button @click="cycleFloorPattern"
+                        class="bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600">
                         🎨 Mudar Chão
                     </button>
-                    <button @click="cancelChanges" class="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">
+                    <button @click="cancelChanges"
+                        class="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">
                         ❌ Cancelar
                     </button>
-                    <button @click="saveChanges" class="bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600">
+                    <button @click="saveChanges"
+                        class="bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600">
                         ✔️ Salvar
                     </button>
                 </template>
@@ -28,11 +33,9 @@
         <div v-if="isEditMode" class="bg-gray-100 p-4 rounded-lg mb-4 flex items-center gap-4 border border-gray-200">
             <h3 class="font-bold text-gray-700">Adicionar ao Mapa:</h3>
             <div class="flex gap-3">
-                <div v-for="tool in toolbox" :key="tool.label"
-                     :title="`Arrastar ${tool.label}`"
-                     class="toolbox-item bg-white p-2 rounded shadow-sm border cursor-grab text-center flex flex-col items-center justify-center w-20 h-20"
-                     draggable="true"
-                     @dragstart="startDragNewElement($event, tool)">
+                <div v-for="tool in toolbox" :key="tool.label" :title="`Arrastar ${tool.label}`"
+                    class="toolbox-item bg-white p-2 rounded shadow-sm border cursor-grab text-center flex flex-col items-center justify-center w-20 h-20"
+                    draggable="true" @dragstart="startDragNewElement($event, tool)">
                     <svg width="24" height="24" viewBox="0 0 16 16" fill="currentColor" v-html="tool.icon_svg"></svg>
                     <div class="text-xs mt-1">{{ tool.label }}</div>
                 </div>
@@ -40,87 +43,76 @@
         </div>
 
         <div class="bg-white p-6 rounded-lg shadow-lg relative overflow-hidden">
-            <svg ref="svgMapRef" viewBox="0 0 400 300" class="w-full h-auto rounded" @mousemove="onMouseMove" @mouseup="endInteraction" @mouseleave="endInteraction" @dragover.prevent @drop="dropNewElement">
+            <svg ref="svgMapRef" viewBox="0 0 400 300" class="w-full h-auto rounded" @mousemove="onMouseMove"
+                @mouseup="endInteraction" @mouseleave="endInteraction" @dragover.prevent @drop="dropNewElement">
                 <defs>
                     <pattern id="floor-marble" patternUnits="userSpaceOnUse" width="60" height="60">
-                        <rect width="60" height="60" fill="#f8fafc"/>
-                        <path d="M60 0 L0 60 M30 0 L0 30 M90 0 L0 90" stroke="#e2e8f0" stroke-width="1"/>
+                        <rect width="60" height="60" fill="#f8fafc" />
+                        <path d="M60 0 L0 60 M30 0 L0 30 M90 0 L0 90" stroke="#e2e8f0" stroke-width="1" />
                     </pattern>
                     <pattern id="floor-darkwood" patternUnits="userSpaceOnUse" width="80" height="20">
-                        <rect width="80" height="20" fill="#4a5568"/>
-                        <line x1="0" y1="10" x2="80" y2="10" stroke="#2d3748" stroke-width="0.5"/>
+                        <rect width="80" height="20" fill="#4a5568" />
+                        <line x1="0" y1="10" x2="80" y2="10" stroke="#2d3748" stroke-width="0.5" />
                     </pattern>
                     <pattern id="floor-tiles" patternUnits="userSpaceOnUse" width="40" height="40">
-                        <rect width="40" height="40" fill="#e2e8f0"/>
-                        <rect width="20" height="20" fill="#cbd5e0"/>
-                        <rect x="20" y="20" width="20" height="20" fill="#cbd5e0"/>
+                        <rect width="40" height="40" fill="#e2e8f0" />
+                        <rect width="20" height="20" fill="#cbd5e0" />
+                        <rect x="20" y="20" width="20" height="20" fill="#cbd5e0" />
                     </pattern>
                 </defs>
 
                 <rect width="100%" height="100%" :fill="`url(#${selectedFloorPatternId})`" />
 
                 <g v-for="element in mapElements" :key="element.id"
-                   @mousedown.left="isEditMode ? startDrag($event, element) : null"
-                   class="group relative"
-                   :class="{'draggable-item': isEditMode}"
-                   filter="url(#dropShadow)"
-                   :transform="`rotate(${element.rotation}, ${element.x + element.width / 2}, ${element.y + element.height / 2})`">
-                    <rect :x="element.x" :y="element.y" :width="element.width" :height="element.height" :fill="element.fill" :rx="element.rx || 0"/>
-                    <g :transform="`translate(${element.x + element.width/2}, ${element.y + element.height/2 - 5}) scale(0.9)`">
-                         <svg width="20" height="20" viewBox="0 0 16 16" :fill="element.textColor" x="-10" y="-10" v-html="element.icon_svg"></svg>
+                    @mousedown.left="isEditMode ? startDrag($event, element) : null" class="group relative"
+                    :class="{ 'draggable-item': isEditMode }" filter="url(#dropShadow)"
+                    :transform="`rotate(${element.rotation}, ${element.x + element.width / 2}, ${element.y + element.height / 2})`">
+                    <rect :x="element.x" :y="element.y" :width="element.width" :height="element.height"
+                        :fill="element.fill" :rx="element.rx || 0" />
+                    <g
+                        :transform="`translate(${element.x + element.width / 2}, ${element.y + element.height / 2 - 5}) scale(0.9)`">
+                        <svg width="20" height="20" viewBox="0 0 16 16" :fill="element.textColor" x="-10" y="-10"
+                            v-html="element.icon_svg"></svg>
                     </g>
-                    <text :x="element.x + element.width / 2" :y="element.y + element.height - 5" text-anchor="middle" font-size="8" :fill="element.textColor" class="font-semibold pointer-events-none">{{ element.label }}</text>
+                    <text :x="element.x + element.width / 2" :y="element.y + element.height - 5" text-anchor="middle"
+                        font-size="8" :fill="element.textColor" class="font-semibold pointer-events-none">{{
+                            element.label
+                        }}</text>
 
                     <g v-if="isEditMode" class="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <line :x1="element.x + element.width / 2" :y1="element.y + element.height / 2" :x2="element.x + element.width / 2" :y2="element.y - 15" stroke="#3b82f6" stroke-width="2" />
-                        <circle :cx="element.x + element.width / 2" :cy="element.y - 15" r="5" fill="#3b82f6" @mousedown.stop="startRotate($event, element)" class="cursor-alias" />
-                        <circle :cx="element.x + element.width + 5" :cy="element.y - 5" r="7" fill="#ef4444" @mousedown.stop="removeElement(element.id)" class="cursor-pointer" />
-                        <text :x="element.x + element.width + 5" :y="element.y - 2" class="pointer-events-none" text-anchor="middle" fill="white" font-size="10">X</text>
+                        <line :x1="element.x + element.width / 2" :y1="element.y + element.height / 2"
+                            :x2="element.x + element.width / 2" :y2="element.y - 15" stroke="#3b82f6"
+                            stroke-width="2" />
+                        <circle :cx="element.x + element.width / 2" :cy="element.y - 15" r="5" fill="#3b82f6"
+                            @mousedown.stop="startRotate($event, element)" class="cursor-alias" />
+                        <circle :cx="element.x + element.width + 5" :cy="element.y - 5" r="7" fill="#ef4444"
+                            @mousedown.stop="removeElement(element.id)" class="cursor-pointer" />
+                        <text :x="element.x + element.width + 5" :y="element.y - 2" class="pointer-events-none"
+                            text-anchor="middle" fill="white" font-size="10">X</text>
                     </g>
                 </g>
 
-                <g v-for="table in tables" :key="table.id"
-                   @click="isEditMode ? null : selectTable(table)"
-                   @mousedown.left="isEditMode ? startDrag($event, table) : null"
-                   class="group relative"
-                   :class="{'draggable-item': isEditMode, 'cursor-pointer': !isEditMode}"
-                   filter="url(#dropShadow)">
-                    <rect :x="table.x" :y="table.y" :width="table.width" :height="table.height" :rx="table.shape === 'round' ? '50%' : '3'" :fill="getTableColor(table)"/>
-                    <text :x="table.x + table.width / 2" :y="table.y + table.height / 2 + 4" text-anchor="middle" font-size="10" fill="white" class="font-bold pointer-events-none">{{ table.id }}</text>
+                <g v-for="table in tables" :key="table.id" @click="isEditMode ? null : selectTable(table)"
+                    @mousedown.left="isEditMode ? startDrag($event, table) : null" class="group relative"
+                    :class="{ 'draggable-item': isEditMode, 'cursor-pointer': !isEditMode }" filter="url(#dropShadow)">
+                    <rect :x="table.x" :y="table.y" :width="table.width" :height="table.height"
+                        :rx="table.shape === 'round' ? '50%' : '3'" :fill="getTableColor(table)" />
+                    <text :x="table.x + table.width / 2" :y="table.y + table.height / 2 + 4" text-anchor="middle"
+                        font-size="10" fill="white" class="font-bold pointer-events-none">{{ table.id }}</text>
                 </g>
             </svg>
         </div>
 
-        <TableActionModal
-            v-if="selectedTable && isActionModalOpen"
-            :table="selectedTable"
-            :user-reservations="userReservations"
-            @close="isActionModalOpen = false"
-            @book="openBookingView"
-            @join-waitlist="joinWaitlist"
-            @cancel="cancelReservation"
-            @viewTable="openTableView"
-            @openConfig="openTableConfig"
-        />
-        <BookingModal
-            v-if="selectedTable && isBookingModalOpen"
-            :table="selectedTable"
-            :restaurant="restaurant"
-            @close="isBookingModalOpen = false"
-            @confirm-booking="confirmBooking"
-        />
-        <TableViewModal
-            v-if="selectedTable && isTableViewModalOpen"
-            :tableId="selectedTable.id"
-            :images="selectedTable.images"
-            @close="isTableViewModalOpen = false"
-        />
-        <TableConfigModal
-            v-if="selectedTable && isTableConfigModalOpen"
-            :table="selectedTable"
-            @close="isTableConfigModalOpen = false"
-            @save="handleSaveTableConfig"
-        />
+        <TableActionModal v-if="selectedTable && isActionModalOpen" :table="selectedTable"
+            :user-reservations="userReservations" @close="isActionModalOpen = false" @book="openBookingView"
+            @join-waitlist="joinWaitlist" @cancel="cancelReservation" @viewTable="openTableView"
+            @openConfig="openTableConfig" />
+        <BookingModal v-if="selectedTable && isBookingModalOpen" :table="selectedTable" :restaurant="restaurant"
+            @close="isBookingModalOpen = false" @confirm-booking="confirmBooking" />
+        <TableViewModal v-if="selectedTable && isTableViewModalOpen" :tableId="selectedTable.id"
+            :images="selectedTable.images" @close="isTableViewModalOpen = false" />
+        <TableConfigModal v-if="selectedTable && isTableConfigModalOpen" :table="selectedTable"
+            @close="isTableConfigModalOpen = false" @save="handleSaveTableConfig" />
     </div>
 </template>
 
@@ -136,6 +128,7 @@ import TableConfigModal from './TableConfigModal.vue';
 const props = defineProps({ restaurant: Object, userReservations: Object });
 // CORREÇÃO: Adicionado o evento 'updateMap'
 const emit = defineEmits(['backToMain', 'bookTable', 'joinWaitlist', 'cancelReservation', 'updateMap']);
+
 
 const userStore = useUserStore();
 const authStore = useAuthStore();
@@ -292,14 +285,14 @@ const startDragNewElement = (evt, tool) => {
 const dropNewElement = (evt) => {
     if (!draggedNewElementType) return;
     const point = getSVGPoint(evt);
-    
+
     const newPiece = {
         ...draggedNewElementType,
         id: `${draggedNewElementType.type}-${Date.now()}`,
         x: point.x - draggedNewElementType.width / 2,
         y: point.y - draggedNewElementType.height / 2,
     };
-    
+
     if (draggedNewElementType.type === 'table') {
         newPiece.id = (tables.length > 0 ? Math.max(...tables.map(t => parseInt(t.id) || 0)) : 0) + 1;
         tables.push(newPiece);
@@ -320,12 +313,14 @@ const openTableConfig = () => {
 };
 
 const handleSaveTableConfig = (updatedTableData) => {
-    const tableIndex = tables.findIndex(t => t.id === updatedTableData.originalId);
-    if (tableIndex !== -1) {
-        tables[tableIndex].id = updatedTableData.id;
-        tables[tableIndex].images = updatedTableData.images;
+    // Encontra a mesa no array local e atualiza os seus dados
+    const tableToUpdate = tables.find(t => t.id === updatedTableData.originalId);
+    if (tableToUpdate) {
+        tableToUpdate.id = updatedTableData.id;
+        tableToUpdate.images = updatedTableData.images;
     }
     isTableConfigModalOpen.value = false;
+    // Nota: Os dados só serão persistidos quando o botão "Salvar" principal for clicado.
 };
 
 const getTableColor = (table) => {
@@ -334,35 +329,48 @@ const getTableColor = (table) => {
     return '#a8a29e';
 };
 
-const selectTable = (table) => { 
-    selectedTable.value = table; 
-    isActionModalOpen.value = true; 
+const selectTable = (table) => {
+    selectedTable.value = table;
+    isActionModalOpen.value = true;
 };
 
-const openBookingView = () => { 
-    isActionModalOpen.value = false; 
-    isBookingModalOpen.value = true; 
+const openBookingView = () => {
+    isActionModalOpen.value = false;
+    isBookingModalOpen.value = true;
 };
 
-const confirmBooking = (bookingDetails) => { 
-    emit('bookTable', { ...bookingDetails, restaurant: props.restaurant, table: selectedTable.value }); 
-    isBookingModalOpen.value = false; 
+const confirmBooking = (bookingDetails) => {
+    emit('bookTable', { ...bookingDetails, restaurant: props.restaurant, table: selectedTable.value });
+    isBookingModalOpen.value = false;
 };
 
-const joinWaitlist = () => { 
-    emit('joinWaitlist', { restaurant: props.restaurant, table: selectedTable.value }); 
-    isActionModalOpen.value = false; 
+const joinWaitlist = () => {
+    emit('joinWaitlist', { restaurant: props.restaurant, table: selectedTable.value });
+    isActionModalOpen.value = false;
 };
 
-const cancelReservation = () => { 
-    emit('cancelReservation'); 
-    isActionModalOpen.value = false; 
+const cancelReservation = () => {
+    emit('cancelReservation');
+    isActionModalOpen.value = false;
 };
 </script>
 
 <style scoped>
-.draggable-item { cursor: grab; }
-.draggable-item:active { cursor: grabbing; filter: drop-shadow(0 0 10px rgba(79, 70, 229, 0.7)); }
-.toolbox-item { transition: transform 0.2s ease; user-select: none; }
-.toolbox-item:hover { transform: scale(1.1); }
+.draggable-item {
+    cursor: grab;
+}
+
+.draggable-item:active {
+    cursor: grabbing;
+    filter: drop-shadow(0 0 10px rgba(79, 70, 229, 0.7));
+}
+
+.toolbox-item {
+    transition: transform 0.2s ease;
+    user-select: none;
+}
+
+.toolbox-item:hover {
+    transform: scale(1.1);
+}
 </style>

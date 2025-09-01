@@ -54,9 +54,27 @@ export const useOrderStore = defineStore('orders', () => {
     }
   }
 
+  /**
+   * Busca o status atual de um pedido específico.
+   */
+  async function fetchOrderStatus(orderId) {
+    try {
+      const response = await apiClient(`/orders/${orderId}/status`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao buscar status do pedido.');
+      }
+      return data; // Retorna { id, status, created_at }
+    } catch (error) {
+      console.error("Erro ao buscar status do pedido:", error.message);
+      return Promise.reject(error.message);
+    }
+  }
+
   return { 
     orderHistory,
     fetchHistory,
-    createOrder 
+    createOrder,
+    fetchOrderStatus
   };
 });

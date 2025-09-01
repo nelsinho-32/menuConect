@@ -14,7 +14,7 @@
 
                 <div>
                     <h4 class="text-sm font-medium text-gray-700 mb-2">Imagens da Mesa</h4>
-                    <div v-if="editableTable.images.length" class="grid grid-cols-3 gap-4 max-h-48 overflow-y-auto pr-2">
+                    <div v-if="editableTable.images && editableTable.images.length" class="grid grid-cols-3 gap-4 max-h-48 overflow-y-auto pr-2">
                         <div v-for="(image, index) in editableTable.images" :key="index" class="relative group">
                             <img :src="image" class="w-full h-24 object-cover rounded-lg border">
                             <button @click="removeImage(index)" class="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -23,14 +23,14 @@
                         </div>
                     </div>
                      <p v-else class="text-sm text-gray-400 text-center py-4">Nenhuma imagem adicionada.</p>
-                     </div>
+                </div>
                 
                 <div>
                     <label for="imageUpload" class="w-full text-sm bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg font-bold hover:bg-indigo-100 cursor-pointer text-center block">
                         + Carregar nova imagem
                     </label>
                     <input type="file" id="imageUpload" @change="handleImageUpload" accept="image/png, image/jpeg, image/webp" class="hidden">
-                    </div>
+                </div>
             </div>
 
             <div class="p-6 bg-gray-50 rounded-b-2xl flex gap-3">
@@ -59,29 +59,24 @@ onMounted(() => {
     editableTable.originalId = tableCopy.id;
 });
 
-// INÍCIO: NOVA FUNÇÃO PARA PROCESSAR UPLOAD
 const handleImageUpload = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (e) => {
-        // O resultado (e.target.result) é uma string base64 que representa a imagem
         editableTable.images.push(e.target.result);
     };
     reader.readAsDataURL(file);
-
-    // Limpa o input para permitir o upload do mesmo ficheiro novamente
     event.target.value = '';
 };
-// FIM: NOVA FUNÇÃO PARA PROCESSAR UPLOAD
 
 const removeImage = (index) => {
     editableTable.images.splice(index, 1);
 };
 
 const save = () => {
-    emit('save', editableTable);
+    emit('save', { ...editableTable });
     emit('close');
 };
 </script>

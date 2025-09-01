@@ -26,6 +26,8 @@ import AnalyticsView from './components/views/AnalyticsView.vue';
 import PromotionsView from './components/views/PromotionsView.vue';
 import FriendsChatPanel from './components/FriendsChatPanel.vue';
 import UsersView from './components/views/UsersView.vue';
+import MyListsView from './components/views/MyListsView.vue';
+import ListDetailView from './components/views/ListDetailView.vue'
 
 // Modais
 import ActionModal from './components/ActionModal.vue';
@@ -49,6 +51,9 @@ import ReservationDetailModal from './components/ReservationDetailModal.vue';
 import AddReviewModal from './components/AddReviewModal.vue';
 import PromotionModal from './components/PromotionModal.vue';
 import SplitBillModal from './components/SplitBillModal.vue';
+import CreateListModal from './components/CreateListModal.vue';
+import TrackOrderModal from './components/TrackOrderModal.vue';
+import AddToListModal from './components/AddToListModal.vue';
 
 // 1. IMPORTAÇÃO DAS STORES DO PINIA
 import { useRestaurantStore } from './stores/restaurantStore';
@@ -65,6 +70,7 @@ import { useAnalyticsStore } from './stores/analyticsStore';
 import { usePromotionStore } from './stores/promotionsStore';
 import { useFriendStore } from './stores/friendStore';
 import { useUsersStore } from './stores/usersStore';
+import { useListStore } from './stores/listStore';
 
 // 2. Ativação das stores para usar no componente
 const restaurantStore = useRestaurantStore();
@@ -81,6 +87,7 @@ const analyticsStore = useAnalyticsStore();
 const promotionStore = usePromotionStore();
 const friendStore = useFriendStore();
 const usersStore = useUsersStore();
+const listStore = useListStore();
 
 // --- ESTADO REATIVO (EXISTENTE) ---
 const cart = reactive([]);
@@ -127,6 +134,11 @@ const restaurantToReview = ref(null);
 const isPromotionModalOpen = ref(false);
 const isSplitBillModalOpen = ref(false);
 const splitDetails = ref(null);
+const isCreateListModalOpen = ref(false);
+const isTrackOrderModalOpen = ref(false);
+const orderToTrackId = ref(null);
+const isAddToListModalOpen = ref(false);
+const itemToAddToList = ref(null);
 // Dados mockados que serão substituídos por dados reais da API
 const allUsers = reactive([]);
 const notifications = reactive([]);
@@ -205,7 +217,8 @@ const loadInitialUserData = async () => {
             reservationStore.fetchAllUserReservations(),
             orderStore.fetchHistory(),
             friendStore.fetchFriendsData(),
-            usersStore.fetchAllUsers()
+            usersStore.fetchAllUsers(),
+            listStore.fetchMyLists()
         ]);
     } catch (error) {
         console.error("Ocorreu um erro ao carregar os dados iniciais:", error);
@@ -570,6 +583,22 @@ const handleDeleteDish = async () => {
     }
 };
 
+const openAddToListModal = (item) => {
+    // Adiciona uma propriedade 'type' para sabermos se é um prato ou restaurante
+    itemToAddToList.value = { ...item, type: item.cuisine ? 'restaurant' : 'dish' };
+    isAddToListModalOpen.value = true;
+};
+
+const handleSelectList = async (listId) => {
+    try {
+        await listStore.addItemToList(listId, itemToAddToList.value);
+        showToast("Item adicionado à lista com sucesso!");
+        isAddToListModalOpen.value = false;
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
+    }
+};
+
 const toggleNotifications = () => {
     isNotificationsOpen.value = !isNotificationsOpen.value;
     if (isNotificationsOpen.value) isFriendsChatOpen.value = false; // Fecha o outro painel
@@ -648,6 +677,22 @@ const addToCart = ({ dish, quantity, isPlanned = false, dineOption = 'delivery',
         showToast(`${quantity}x '${dish.dishName}' adicionado!`);
     }
 };
+
+const handleCreateList = async (listData) => {
+    try {
+        await listStore.createList(listData);
+        showToast("Lista criada com sucesso!");
+        isCreateListModalOpen.value = false;
+    } catch (errorMsg) {
+        showToast(errorMsg, 'error');
+    }
+};
+
+const openTrackOrderModal = (orderId) => {
+    orderToTrackId.value = orderId;
+    isTrackOrderModalOpen.value = true;
+};
+
 
 const handleConfirmEncontro = async (encontroData) => {
     try {
@@ -1145,17 +1190,19 @@ const closeCustomizeModal = () => {
                     @toggle-dish-favorite="toggleDishFavorite" @toggle-restaurant-favorite="toggleRestaurantFavorite"
                     @request-reservation="restaurant => goToView('reservation', restaurant)"
                     @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)"
-                    @open-payment-modal="openCheckout" @open-menu-modal="openMenuModal" />
+                    @open-payment-modal="openCheckout" @open-menu-modal="openMenuModal"
+                    @add-to-list="openAddToListModal" />
                 <RestaurantsView v-if="viewState.name === 'restaurants'" :restaurants="restaurantStore.restaurants"
                     :favorite-restaurants="userDataStore.favoriteRestaurantIds"
                     @toggle-favorite="toggleRestaurantFavorite"
                     @request-reservation="restaurant => goToView('reservation', restaurant)"
                     @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)"
-                    @open-add-restaurant-modal="openAddRestaurantModal" @open-menu-modal="openMenuModal" />
+                    @open-add-restaurant-modal="openAddRestaurantModal" @open-menu-modal="openMenuModal"
+                    @add-to-list="openAddToListModal" />
                 <DishesView v-if="viewState.name === 'dishes'" :dishes="restaurantStore.allDishes"
                     :favorite-dishes="userDataStore.favoriteDishIds" @open-action-modal="openActionModal"
                     @open-dine-options="openDineOptionsModal" @toggle-favorite="toggleDishFavorite"
-                    @open-add-dish-modal="openAddDishModal" />
+                    @open-add-dish-modal="openAddDishModal" @add-to-list="openAddToListModal" />
                 <RestaurantDetailView v-if="viewState.name === 'restaurantDetail'" :restaurant="viewState.data"
                     :user-profile="userProfile" :all-users="allUsers" @back-to-main="goBack"
                     @open-action-modal="openActionModal" @open-add-dish-modal="openAddDishModal"
@@ -1180,12 +1227,14 @@ const closeCustomizeModal = () => {
                     :favorite-restaurants="favoritedRestaurantsList" @toggle-favorite="toggleRestaurantFavorite"
                     @request-reservation="restaurant => goToView('reservation', restaurant)"
                     @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)"
-                    @back-to-main="goToView('home')" @open-menu-modal="openMenuModal" />
+                    @back-to-main="goToView('home')" @open-menu-modal="openMenuModal"
+                    @add-to-list="openAddToListModal" />
                 <FavoriteDishesView v-if="viewState.name === 'favoriteDishes'" :favorite-dishes="favoritedDishesList"
                     @toggle-favorite="toggleDishFavorite" @open-action-modal="openActionModal"
-                    @open-dine-options="openDineOptionsModal" @back-to-main="goToView('home')" />
+                    @open-dine-options="openDineOptionsModal" @back-to-main="goToView('home')"
+                    @add-to-list="openAddToListModal" />
                 <OrderHistoryView v-if="viewState.name === 'orderHistory'" :order-history="orderHistory"
-                    @back-to-main="goToView('home')" @reorder="handleReorder" />
+                    @back-to-main="goToView('home')" @reorder="handleReorder" @track-order="openTrackOrderModal" />
                 <!-- <TableManagementView v-if="viewState.name === 'tableManagement'" :order-history="orderHistory"
                     @open-table-detail-modal="openTableDetailModal" /> -->
                 <ManagementView v-if="viewState.name === 'dashboard'"
@@ -1204,6 +1253,13 @@ const closeCustomizeModal = () => {
                     @update-user="handleUpdateUser" @back-to-main="goBack"
                     @send-friend-request="handleSendFriendRequest" />
                 <UsersView v-if="viewState.name === 'users'" @viewProfile="id => goToView('userProfile', id)" />
+                <MyListsView v-if="viewState.name === 'myLists'" @back-to-main="goBack"
+                    @open-create-list-modal="isCreateListModalOpen = true"
+                    @view-list="id => goToView('listDetail', id)" />
+                <ListDetailView v-if="viewState.name === 'listDetail'" :list-id="viewState.data"
+                    @back="goToView('myLists')"
+                    @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)"
+                    @open-action-modal="openActionModal" />
             </main>
 
             <Footer />
@@ -1259,6 +1315,13 @@ const closeCustomizeModal = () => {
             <SplitBillModal v-if="isSplitBillModalOpen"
                 :total="cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)"
                 @close="isSplitBillModalOpen = false" @confirm="handleConfirmSplit" />
+            <CreateListModal v-if="isCreateListModalOpen" @close="isCreateListModalOpen = false"
+                @create="handleCreateList" />
+            <TrackOrderModal v-if="isTrackOrderModalOpen" :order-id="orderToTrackId"
+                @close="isTrackOrderModalOpen = false" />
+            <AddToListModal v-if="isAddToListModalOpen" :item-to-add="itemToAddToList"
+                @close="isAddToListModalOpen = false" @select-list="handleSelectList"
+                @create-list="() => { isAddToListModalOpen = false; isCreateListModalOpen = true; }" />
             <div
                 :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
                 {{ toastMessage }}

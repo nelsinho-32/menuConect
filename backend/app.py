@@ -1894,6 +1894,222 @@ def get_user_profile(current_user, user_id):
         return jsonify(user_profile)
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
+    
+# --- INÍCIO DAS NOVAS ROTAS ---
+
+# 1. RECOMENDAÇÕES BASEADAS EM AMIGOS
+@app.route('/api/restaurants/<int:restaurant_id>/friends', methods=['GET'])
+@token_required()
+def get_friends_who_favorited(current_user, restaurant_id):
+    """Busca amigos do usuário atual que favoritaram um restaurante específico."""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        
+        sql = """
+            SELECT u.id, u.name, u.avatarUrl
+            FROM users u
+            JOIN favorite_restaurants fr ON u.id = fr.user_id
+            WHERE fr.restaurant_id = %s
+            AND u.id IN (
+                SELECT followed_id FROM friendships WHERE follower_id = %s AND status = 'accepted'
+                UNION
+                SELECT follower_id FROM friendships WHERE followed_id = %s AND status = 'accepted'
+            )
+        """
+        cursor.execute(sql, (restaurant_id, current_user['id'], current_user['id']))
+        friends = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        return jsonify(friends)
+        
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+# 2. LISTAS PERSONALIZADAS (CRUD)
+@app.route('/api/lists', methods=['POST'])
+@token_required()
+def create_list(current_user):
+    data = request.get_json()
+    name = data.get('name')
+    if not name:
+        return jsonify({"error": "O nome da lista é obrigatório."}), 400
+    
+    sql = "INSERT INTO lists (user_id, name, description, is_public) VALUES (%s, %s, %s, %s)"
+    val = (current_user['id'], name, data.get('description'), data.get('is_public', False))
+    
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(sql, val)
+        conn.commit()
+        new_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Lista criada com sucesso!", "listId": new_id}), 201
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+@app.route('/api/my-lists', methods=['GET'])
+@token_required()
+def get_my_lists(current_user):
+    """Busca todas as listas criadas pelo usuário."""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        # Query para buscar as listas e contar quantos itens cada uma tem
+        sql = """
+            SELECT l.*, COUNT(li.id) as itemCount
+            FROM lists l
+            LEFT JOIN list_items li ON l.id = li.list_id
+            WHERE l.user_id = %s
+            GROUP BY l.id
+            ORDER BY l.created_at DESC
+        """
+        cursor.execute(sql, (current_user['id'],))
+        lists = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify(lists)
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+# 3. RASTREAMENTO DE PEDIDO
+@app.route('/api/orders/<int:order_id>/status', methods=['GET'])
+@token_required()
+def get_order_status(current_user, order_id):
+    """Busca o status de um pedido específico do usuário."""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id, status, created_at FROM orders WHERE id = %s AND user_id = %s", (order_id, current_user['id']))
+        order = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if order:
+            return jsonify(order)
+        return jsonify({"error": "Pedido não encontrado."}), 404
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+@app.route('/api/management/orders/<int:order_id>/status', methods=['PUT'])
+@token_required(roles=['admin', 'empresa'])
+def update_order_status(current_user, order_id):
+    """Atualiza o status de um pedido (para uso do restaurante)."""
+    data = request.get_json()
+    new_status = data.get('status')
+    valid_statuses = ['confirmed', 'preparing', 'out_for_delivery', 'completed', 'cancelled']
+    if not new_status or new_status not in valid_statuses:
+        return jsonify({"error": "Status inválido."}), 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        
+        # Opcional: Verificar se o restaurante tem permissão para alterar este pedido
+        # (Esta lógica pode ser adicionada se necessário)
+        
+        cursor.execute("UPDATE orders SET status = %s WHERE id = %s", (new_status, order_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": f"Status do pedido atualizado para {new_status}."})
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    
+# --- NOVAS ROTAS: ADICIONAR ITEM A UMA LISTA ---
+
+@app.route('/api/lists/<int:list_id>/items', methods=['POST'])
+@token_required()
+def add_item_to_list(current_user, list_id):
+    """Adiciona um restaurante ou prato a uma lista pessoal."""
+    data = request.get_json()
+    restaurant_id = data.get('restaurantId')
+    dish_id = data.get('dishId')
+
+    if not restaurant_id and not dish_id:
+        return jsonify({"error": "É necessário fornecer um restaurante ou um prato."}), 400
+
+    # Verifica se o usuário é o dono da lista
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT user_id FROM lists WHERE id = %s", (list_id,))
+        list_owner = cursor.fetchone()
+
+        if not list_owner or list_owner['user_id'] != current_user['id']:
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "Lista não encontrada ou permissão negada."}), 404
+        
+        # Insere o item na lista
+        sql = "INSERT INTO list_items (list_id, restaurant_id, dish_id) VALUES (%s, %s, %s)"
+        cursor.execute(sql, (list_id, restaurant_id, dish_id))
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Item adicionado à lista com sucesso!"}), 201
+
+    except mysql.connector.Error as err:
+        if err.errno == 1062: # Chave duplicada
+            return jsonify({"error": "Este item já está nesta lista."}), 409
+        return jsonify({"error": str(err)}), 500
+
+@app.route('/api/lists/<int:list_id>', methods=['GET'])
+@token_required()
+def get_list_details(current_user, list_id):
+    """Busca os detalhes de uma lista e os seus itens."""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # 1. Verifica se a lista pertence ao usuário
+        cursor.execute("SELECT id, user_id, name, description FROM lists WHERE id = %s", (list_id,))
+        list_details = cursor.fetchone()
+        if not list_details or list_details['user_id'] != current_user['id']:
+            return jsonify({"error": "Lista não encontrada ou permissão negada."}), 404
+
+        # 2. Busca os restaurantes na lista
+        restaurants_sql = """
+            SELECT r.id, r.name, r.cuisine, r.city, r.imageUrl, r.logoUrl, r.average_rating, r.review_count
+            FROM list_items li
+            JOIN restaurants r ON li.restaurant_id = r.id
+            WHERE li.list_id = %s AND li.restaurant_id IS NOT NULL
+        """
+        cursor.execute(restaurants_sql, (list_id,))
+        restaurants = cursor.fetchall()
+        for r in restaurants:
+            if r.get('average_rating') is not None:
+                r['average_rating'] = float(r['average_rating'])
+
+
+        # 3. Busca os pratos na lista
+        dishes_sql = """
+            SELECT d.id, d.name as dishName, d.price, d.imageUrl, d.restaurant_id, r.name as restaurantName
+            FROM list_items li
+            JOIN dishes d ON li.dish_id = d.id
+            JOIN restaurants r ON d.restaurant_id = r.id
+            WHERE li.list_id = %s AND li.dish_id IS NOT NULL
+        """
+        cursor.execute(dishes_sql, (list_id,))
+        dishes = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            "details": list_details,
+            "items": {
+                "restaurants": restaurants,
+                "dishes": dishes
+            }
+        })
+
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
 
 # --- Executar a Aplicação ---
 if __name__ == '__main__':

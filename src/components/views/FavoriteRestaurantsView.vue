@@ -18,6 +18,7 @@
                 @request-reservation="restaurant => $emit('requestReservation', restaurant)"
                 @view-restaurant="restaurant => $emit('viewRestaurant', restaurant)"
                 @open-menu-modal="restaurant => $emit('openMenuModal', restaurant)"
+                @add-to-list="restaurant => $emit('addToList', restaurant)"
             />
         </div>
     </div>
@@ -30,5 +31,5 @@ defineProps({
     favoriteRestaurants: { type: Array, required: true }
 });
 
-defineEmits(['toggleFavorite', 'requestReservation', 'viewRestaurant', 'backToMain', 'openMenuModal']);
+defineEmits(['toggleFavorite', 'requestReservation', 'viewRestaurant', 'backToMain', 'openMenuModal', 'addToList']);
 </script>

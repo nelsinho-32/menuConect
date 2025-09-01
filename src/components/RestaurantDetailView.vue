@@ -42,19 +42,27 @@
                 Ver Rota
             </button>
             <section v-if="restaurant.promotions && restaurant.promotions.length > 0" class="my-12">
-    <h2 class="section-title mb-6">🎉 Ofertas Especiais Ativas</h2>
-    <div class="space-y-4">
-        <div v-for="promo in restaurant.promotions" :key="promo.id" class="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-lg shadow-sm">
-            <div class="flex justify-between items-start">
-                <div>
-                    <h3 class="font-bold text-indigo-800 text-lg">{{ promo.title }}</h3>
-                    <p class="text-indigo-700 text-sm mt-1">{{ promo.description }}</p>
+                <h2 class="section-title mb-6">Amigos que gostam deste lugar</h2>
+                <div class="flex -space-x-4">
+                    <img v-for="friend in friendsWhoLike" :key="friend.id"
+                        class="w-12 h-12 border-2 border-white rounded-full object-cover" :src="friend.avatarUrl"
+                        :alt="friend.name" :title="friend.name">
                 </div>
-                <p class="text-xl font-extrabold text-green-600 flex-shrink-0 ml-4">{{ formatDiscount(promo) }}</p>
-            </div>
-        </div>
-    </div>
-</section>
+                <h2 class="section-title mb-6">🎉 Ofertas Especiais Ativas</h2>
+                <div class="space-y-4">
+                    <div v-for="promo in restaurant.promotions" :key="promo.id"
+                        class="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-lg shadow-sm">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-bold text-indigo-800 text-lg">{{ promo.title }}</h3>
+                                <p class="text-indigo-700 text-sm mt-1">{{ promo.description }}</p>
+                            </div>
+                            <p class="text-xl font-extrabold text-green-600 flex-shrink-0 ml-4">{{ formatDiscount(promo)
+                                }}</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </div>
 
         <AIEncontroSection :restaurant="restaurant" :user-profile="userProfile" :all-users="allUsers"
@@ -67,33 +75,36 @@
             @open-action-modal="dish => $emit('openActionModal', dish)"
             @open-add-menu-item-modal="category => $emit('openAddDishModal', { restaurant, category })"
             @delete-dish="dish => $emit('deleteDish', dish)"
-            @toggle-availability="item => $emit('toggleAvailability', item)" 
-        />
+            @toggle-availability="item => $emit('toggleAvailability', item)" />
         <section class="my-12">
-    <div class="flex justify-between items-center mb-6">
-        <h2 class="section-title">Avaliações ({{ restaurant.review_count || 0 }})</h2>
-        <button @click="$emit('openAddReviewModal', restaurant)" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">
-            Deixar uma Avaliação
-        </button>
-    </div>
-    <div class="bg-white p-6 rounded-lg shadow-lg">
-        
-        <div v-if="restaurant.review_count > 0" class="flex items-center gap-2 mb-4 border-b pb-4">
-            <span class="text-4xl font-extrabold text-gray-800">{{ restaurant.average_rating.toFixed(1).replace('.', ',') }}</span>
-            <div class="flex items-center text-2xl" :title="`${restaurant.average_rating.toFixed(2)} de 5 estrelas`">
-                 <span v-for="n in 5" :key="n" :class="n <= Math.round(restaurant.average_rating) ? 'text-yellow-400' : 'text-gray-300'">★</span>
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="section-title">Avaliações ({{ restaurant.review_count || 0 }})</h2>
+                <button @click="$emit('openAddReviewModal', restaurant)"
+                    class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">
+                    Deixar uma Avaliação
+                </button>
             </div>
-            <span class="text-gray-500 ml-2">de {{ restaurant.review_count }} avaliações</span>
-        </div>
-        
-        <div v-if="restaurantStore.reviews.length > 0">
-            <ReviewCard v-for="review in restaurantStore.reviews" :key="review.id" :review="review" />
-        </div>
-        <div v-else class="text-center text-gray-500 py-8">
-            <p>{{ restaurant.review_count > 0 ? 'A carregar avaliações...' : 'Este restaurante ainda não tem avaliações. Seja o primeiro!' }}</p>
-        </div>
-    </div>
-</section>
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+
+                <div v-if="restaurant.review_count > 0" class="flex items-center gap-2 mb-4 border-b pb-4">
+                    <span class="text-4xl font-extrabold text-gray-800">{{
+                        restaurant.average_rating.toFixed(1).replace('.', ',') }}</span>
+                    <div class="flex items-center text-2xl"
+                        :title="`${restaurant.average_rating.toFixed(2)} de 5 estrelas`">
+                        <span v-for="n in 5" :key="n"
+                            :class="n <= Math.round(restaurant.average_rating) ? 'text-yellow-400' : 'text-gray-300'">★</span>
+                    </div>
+                    <span class="text-gray-500 ml-2">de {{ restaurant.review_count }} avaliações</span>
+                </div>
+
+                <div v-if="restaurantStore.reviews.length > 0">
+                    <ReviewCard v-for="review in restaurantStore.reviews" :key="review.id" :review="review" />
+                </div>
+                <div v-else class="text-center text-gray-500 py-8">
+                    <p>{{ restaurant.review_count > 0 ? 'A carregar avaliações...' : 'Este restaurante ainda não tem avaliações. Seja o primeiro!' }}</p>
+                </div>
+            </div>
+        </section>
 
     </div>
 </template>
@@ -102,9 +113,11 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import AIEncontroSection from './sections/AIEncontroSection.vue';
 import RestaurantMenu from './RestaurantMenu.vue';
-import ReviewCard from  './ReviewCard.vue';
+import ReviewCard from './ReviewCard.vue';
 import { useRestaurantStore } from '@/stores/restaurantStore';
+import apiClient from '@/api/client';
 
+const friendsWhoLike = ref([]);
 const restaurantStore = useRestaurantStore();
 
 const props = defineProps({
@@ -115,14 +128,14 @@ const props = defineProps({
 
 // ADICIONE 'toggleAvailability' À LISTA DE EVENTOS
 defineEmits([
-    'backToMain', 
-    'openActionModal', 
-    'openAddDishModal', 
-    'confirmEncontro', 
-    'openMenuItemSelectModal', 
-    'openCustomizeModal', 
-    'openTableSelectModal', 
-    'viewRoute', 
+    'backToMain',
+    'openActionModal',
+    'openAddDishModal',
+    'confirmEncontro',
+    'openMenuItemSelectModal',
+    'openCustomizeModal',
+    'openTableSelectModal',
+    'viewRoute',
     'deleteDish',
     'openAddReviewModal',
     'toggleAvailability'
@@ -156,16 +169,31 @@ const prevImage = () => {
     currentImageIndex.value = (currentImageIndex.value - 1 + carouselImages.value.length) % carouselImages.value.length;
 };
 
+const fetchFriendsWhoLike = async () => {
+    if (!props.restaurant?.id) return;
+    try {
+        const response = await apiClient(`/restaurants/${props.restaurant.id}/friends`);
+        const data = await response.json();
+        if (response.ok) {
+            friendsWhoLike.value = data;
+        }
+    } catch (error) {
+        console.error("Erro ao buscar amigos que favoritaram:", error);
+    }
+};
+
 onMounted(() => {
     setupCarousel();
-    if(props.restaurant?.id) {
+    if (props.restaurant?.id) {
         restaurantStore.fetchReviewsForRestaurant(props.restaurant.id);
+        fetchFriendsWhoLike();
     }
 });
 
 watch(() => props.restaurant, (newRestaurant) => {
     if (newRestaurant?.id) {
         restaurantStore.fetchReviewsForRestaurant(newRestaurant.id);
+        fetchFriendsWhoLike();
     }
 });
 

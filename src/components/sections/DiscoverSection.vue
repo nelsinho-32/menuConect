@@ -16,6 +16,7 @@
                     @request-reservation="restaurant => $emit('requestReservation', restaurant)"
                     @view-restaurant="restaurant => $emit('viewRestaurant', restaurant)"
                     @open-menu-modal="restaurant => $emit('openMenuModal', restaurant)"
+                    @add-to-list="restaurant => $emit('addToList', restaurant)"
                 />
             </div>
             
@@ -36,7 +37,7 @@ defineProps({
     title: { type: String, default: 'Descubra Novos Lugares' }
 });
 
-defineEmits(['toggleFavorite', 'requestReservation', 'viewRestaurant', 'openMenuModal']);
+defineEmits(['toggleFavorite', 'requestReservation', 'viewRestaurant', 'openMenuModal', 'addToList']);
 
 const scrollContainer = ref(null);
 const isScrollAtStart = ref(true);
