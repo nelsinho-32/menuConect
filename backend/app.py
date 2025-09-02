@@ -16,14 +16,23 @@ app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}})
 bcrypt = Bcrypt(app)
 app.config['SECRET_KEY'] = 'esta-e-uma-chave-muito-secreta'
-db_url = os.environ.get('CLEARDB_DATABASE_URL')
+db_url = os.environ.get('JAWSDB_URL')
 
-db_config = {
-    'user': db_url.split(':')[1].split('@')[0],
-    'password': db_url.split(':')[2].split('@')[0],
-    'host': db_url.split('@')[1].split('/')[0].split('?')[0],
-    'database': db_url.split('/')[-1].split('?')[0]
-}
+if db_url:
+    db_config = {
+        'user': db_url.split(':')[1].split('@')[0],
+        'password': db_url.split(':')[2].split('@')[0],
+        'host': db_url.split('@')[1].split('/')[0].split('?')[0],
+        'database': db_url.split('/')[-1].split('?')[0]
+    }
+else:
+    # Mantém a configuração local para quando você rodar na sua máquina
+    db_config = {
+        'host': 'localhost',
+        'user': 'root',
+        'password': 'SuaSenhaLocalAqui', # <-- Coloque sua senha local aqui
+        'database': 'menu_connect'
+    }
 
 # --- Decorator de Autenticação ---
 def token_required(roles=[]):
