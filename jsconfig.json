@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "target": "esnext",
-    "module": "esnext",
-    "moduleResolution": "node",
+    "module": "Node16", // Atualizado para ser compatível com "moduleResolution": "node16"
+    "moduleResolution": "node16",
     "baseUrl": "./src",
     "paths": {
       "@/*": ["*"],

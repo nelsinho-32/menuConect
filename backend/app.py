@@ -9,18 +9,20 @@ import jwt
 import datetime
 from functools import wraps
 import json
+import os
 
 # --- Configuração ---
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}})
 bcrypt = Bcrypt(app)
 app.config['SECRET_KEY'] = 'esta-e-uma-chave-muito-secreta'
+db_url = os.environ.get('CLEARDB_DATABASE_URL')
 
 db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': 'Deusefiel1.', # <-- Lembre-se de colocar a sua senha
-    'database': 'menu_connect'
+    'user': db_url.split(':')[1].split('@')[0],
+    'password': db_url.split(':')[2].split('@')[0],
+    'host': db_url.split('@')[1].split('/')[0].split('?')[0],
+    'database': db_url.split('/')[-1].split('?')[0]
 }
 
 # --- Decorator de Autenticação ---
