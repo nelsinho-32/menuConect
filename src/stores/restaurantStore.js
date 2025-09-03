@@ -30,7 +30,8 @@ export const useRestaurantStore = defineStore('restaurants', () => {
    */
   async function fetchRestaurantsFromAPI() {
     try {
-      const response = await fetch('http://localhost:5000/api/restaurants');
+      // const response = await fetch('http://localhost:5000/api/restaurants');
+      const response = await apiClient('/restaurants');
       if (!response.ok) throw new Error('A resposta da rede não foi bem-sucedida.');
       const dataFromAPI = await response.json();
 

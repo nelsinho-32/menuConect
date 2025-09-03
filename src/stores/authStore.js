@@ -2,6 +2,7 @@
 
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import apiClient from '@/api/client';
 
 export const useAuthStore = defineStore('auth', () => {
   // --- STATE ---
@@ -51,7 +52,7 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function register(credentials) {
     try {
-      const response = await fetch('http://localhost:5000/api/register', {
+      const response = await apiClient('/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
@@ -77,7 +78,7 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function login(credentials) {
     try {
-      const response = await fetch('http://localhost:5000/api/login', {
+      const response = await apiClient('/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
@@ -114,7 +115,7 @@ export const useAuthStore = defineStore('auth', () => {
             return Promise.reject("Nenhum token encontrado.");
         }
         try {
-            const response = await fetch('http://localhost:5000/api/profile', {
+            const response = await apiClient('/profile', {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

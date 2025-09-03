@@ -13,7 +13,8 @@ import os
 
 # --- Configuração ---
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}})
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+CORS(app, resources={r"/api/*": {"origins": FRONTEND_URL}})
 bcrypt = Bcrypt(app)
 app.config['SECRET_KEY'] = 'esta-e-uma-chave-muito-secreta'
 db_url = os.environ.get('JAWSDB_URL')
