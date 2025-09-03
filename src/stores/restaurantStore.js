@@ -30,10 +30,9 @@ export const useRestaurantStore = defineStore('restaurants', () => {
    */
   async function fetchRestaurantsFromAPI() {
     try {
-      // const response = await fetch('http://localhost:5000/api/restaurants');
-      const response = await apiClient('/restaurants');
-      if (!response.ok) throw new Error('A resposta da rede não foi bem-sucedida.');
-      const dataFromAPI = await response.json();
+        const response = await apiClient('/restaurants'); // Usa o apiClient
+        if (!response.ok) throw new Error('A resposta da rede não foi bem-sucedida.');
+        const dataFromAPI = await response.json();
 
        // Para cada restaurante, percorre o seu menu e adiciona as informações necessárias a cada prato.
       const processedData = dataFromAPI.map(restaurant => {

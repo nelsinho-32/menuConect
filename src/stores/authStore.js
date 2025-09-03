@@ -52,25 +52,21 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function register(credentials) {
     try {
-      const response = await apiClient('/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
-      });
+        const response = await apiClient('/register', {
+            method: 'POST',
+            body: JSON.stringify(credentials),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        // Lança um erro com a mensagem do servidor para ser apanhado no catch.
-        throw new Error(errorData.error || 'Falha ao registar.');
-      }
-
-      return true; // Sucesso
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Falha ao registar.');
+        }
+        return true;
     } catch (error) {
-      console.error("Erro no registo:", error);
-      // Retorna a mensagem de erro para ser exibida na UI.
-      return Promise.reject(error.message);
+        console.error("Erro no registo:", error);
+        return Promise.reject(error.message);
     }
-  }
+}
 
   /**
    * Tenta fazer login de um usuário.
@@ -78,25 +74,22 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function login(credentials) {
     try {
-      const response = await apiClient('/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
-      });
+        const response = await apiClient('/login', {
+            method: 'POST',
+            body: JSON.stringify(credentials),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Falha no login.');
-      }
-
-      const data = await response.json();
-      setAuthData(data.user, data.token); // Guarda os dados do usuário e o token
-
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Falha no login.');
+        }
+        const data = await response.json();
+        setAuthData(data.user, data.token);
     } catch (error) {
-       console.error("Erro no login:", error);
-       return Promise.reject(error.message);
+        console.error("Erro no login:", error);
+        return Promise.reject(error.message);
     }
-  }
+}
 
   /**
    * Faz logout do usuário.
@@ -111,35 +104,30 @@ export const useAuthStore = defineStore('auth', () => {
        * @param {object} updatedData - Os novos dados do perfil.
        */
       async function updateProfile(updatedData) {
-        if (!token.value) {
-            return Promise.reject("Nenhum token encontrado.");
+    if (!token.value) {
+        return Promise.reject("Nenhum token encontrado.");
+    }
+    try {
+        // apiClient já inclui o token, então não precisamos adicioná-lo aqui
+        const response = await apiClient('/profile', {
+            method: 'PUT',
+            body: JSON.stringify(updatedData)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Falha ao atualizar o perfil.');
         }
-        try {
-            const response = await apiClient('/profile', {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token.value}` // Envia o token para autenticação
-                },
-                body: JSON.stringify(updatedData)
-            });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Falha ao atualizar o perfil.');
-            }
+        const data = await response.json();
+        setAuthData(data.user, token.value);
+        return data.user;
 
-            const data = await response.json();
-            // Atualiza os dados do usuário localmente com a resposta do servidor
-            setAuthData(data.user, token.value); 
-            
-            return data.user;
-
-        } catch (error) {
-            console.error("Erro ao atualizar perfil:", error);
-            return Promise.reject(error.message);
-        }
-      }
+    } catch (error) {
+        console.error("Erro ao atualizar perfil:", error);
+        return Promise.reject(error.message);
+    }
+}
 
   return {
     user,
