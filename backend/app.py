@@ -10,27 +10,31 @@ import datetime
 from functools import wraps
 import json
 import os
+from urllib.parse import urlparse
 
 # --- Configuração ---
 app = Flask(__name__)
 CORS(app)
 bcrypt = Bcrypt(app)
 app.config['SECRET_KEY'] = 'esta-e-uma-chave-muito-secreta'
-db_url = os.environ.get('JAWSDB_URL')
+db_url_str = os.environ.get('JAWSDB_URL')
+db_config = {}
 
-if db_url:
+if db_url_str:
+    url = urlparse(db_url_str)
     db_config = {
-        'user': db_url.split(':')[1].split('@')[0],
-        'password': db_url.split(':')[2].split('@')[0],
-        'host': db_url.split('@')[1].split('/')[0].split('?')[0],
-        'database': db_url.split('/')[-1].split('?')[0]
+        'user': url.username,
+        'password': url.password,
+        'host': url.hostname,
+        'database': url.path[1:], # Remove a barra inicial '/'
+        'port': url.port
     }
 else:
     # Mantém a configuração local para quando você rodar na sua máquina
     db_config = {
         'host': 'localhost',
         'user': 'root',
-        'password': 'SuaSenhaLocalAqui', # <-- Coloque sua senha local aqui
+        'password': 'Deusefiel1.', # Sua senha local
         'database': 'menu_connect'
     }
 
