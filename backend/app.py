@@ -11,8 +11,11 @@ from functools import wraps
 import json
 import os
 from urllib.parse import urlparse
+import mercadopago
+from dotenv import load_dotenv
 
 # --- Configuração ---
+load_dotenv()
 app = Flask(__name__)
 CORS(app)
 bcrypt = Bcrypt(app)
@@ -37,6 +40,8 @@ else:
         'password': 'Deusefiel1.', # Sua senha local
         'database': 'menu_connect'
     }
+    
+sdk = mercadopago.SDK(os.environ.get('MERCADO_PAGO_ACCESS_TOKEN'))
 
 # --- Decorator de Autenticação ---
 def token_required(roles=[]):
@@ -1108,9 +1113,9 @@ def get_my_orders(current_user):
             cursor.execute(items_sql, (order['id'],))
             order_items = cursor.fetchall()
 
-            for item in order_items:
-                if item['customization']:
-                    item['customization'] = json.loads(item['customization']) 
+            for order_item in order_items:
+                if order_item['customization']:
+                    order_item['customization'] = json.loads(order_item['customization']) 
             
             order['items'] = order_items
             
@@ -2124,6 +2129,114 @@ def get_list_details(current_user, list_id):
 
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
+    
+
+# --- INÍCIO: Nova Rota para Criar Pagamento ---
+@app.route('/api/create_payment', methods=['POST'])
+@token_required()
+def create_payment(current_user):
+    """
+    Cria um pedido no banco com status 'pending_payment' e depois
+    cria uma preferência de pagamento no Mercado Pago.
+    """
+    data = request.get_json()
+    cart_items = data.get('cartItems')
+    total_price = sum(float(item.get('price', 0)) * int(item.get('quantity', 0)) for item in cart_items)
+
+    if not cart_items:
+        return jsonify({"error": "O carrinho está vazio."}), 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # 1. Criar o pedido no seu banco de dados com status 'pending_payment'
+        order_sql = "INSERT INTO orders (user_id, restaurant_id, total_price, status) VALUES (%s, %s, %s, 'pending_payment')"
+        # Assumindo um único restaurante por enquanto para simplificar
+        restaurant_id = cart_items[0]['restaurantId']
+        cursor.execute(order_sql, (current_user['id'], restaurant_id, total_price))
+        order_id = cursor.lastrowid
+
+        # Inserir itens do pedido
+        for item in cart_items:
+            item_sql = "INSERT INTO order_items (order_id, dish_id, quantity, price_at_time) VALUES (%s, %s, %s, %s)"
+            cursor.execute(item_sql, (order_id, item['id'], item['quantity'], float(item['price'])))
+
+        conn.commit()
+
+        # 2. Criar a preferência de pagamento no Mercado Pago
+        items_for_mp = [{"title": i.get('dishName'), "quantity": i.get('quantity'), "unit_price": float(i.get('price')), "currency_id": "BRL"} for i in cart_items]
+
+        preference_data = {
+            "items": items_for_mp,
+            "payer": {"email": current_user.get('email')},
+            "back_urls": {
+        "success": f"https://menuconnect.com/order/{order_id}/success",  # URL pública do frontend
+        "failure": "https://menuconnect.com/order/failure",  # Opcional: URL para falha
+        "pending": "https://menuconnect.com/order/pending"  # Opcional: URL para pagamentos pendentes
+    },
+            "auto_return": "approved",
+            "external_reference": str(order_id), # Associamos o ID do nosso pedido
+            "notification_url": "https://api.menuconnect.com/api/ipn-mercado-pago" # Substitua pela URL pública do seu backend
+        }
+        
+        preference_response = sdk.preference().create(preference_data)
+        preference = preference_response["response"]
+
+        # 3. Atualizar o nosso pedido com o ID de pagamento do Mercado Pago
+        cursor.execute("UPDATE orders SET payment_id = %s WHERE id = %s", (preference['id'], order_id))
+        conn.commit()
+
+        return jsonify({"init_point": preference['init_point']})
+
+    except Exception as e:
+        print(f"Erro ao criar pagamento: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+# --- FIM: Alteração na Rota de Criar Pagamento ---
+
+
+# --- INÍCIO: Nova Rota para Webhook (IPN) do Mercado Pago ---
+@app.route('/api/ipn-mercado-pago', methods=['POST'])
+def ipn_mercado_pago():
+    """
+    Recebe e processa notificações de pagamento do Mercado Pago.
+    """
+    data = request.get_json()
+    if not data or 'type' not in data:
+        return jsonify({"status": "error", "message": "Payload inválido"}), 400
+
+    if data['type'] == 'payment':
+        payment_id = data['data']['id']
+        
+        try:
+            # Busca as informações do pagamento no Mercado Pago
+            payment_info_response = sdk.payment().get(payment_id)
+            payment_info = payment_info_response["response"]
+
+            if payment_info['status'] == 'approved':
+                order_id = payment_info['external_reference']
+                
+                # Atualiza o status do pedido no seu banco de dados
+                conn = mysql.connector.connect(**db_config)
+                cursor = conn.cursor()
+                cursor.execute("UPDATE orders SET status = 'completed' WHERE id = %s", (order_id,))
+                conn.commit()
+                cursor.close()
+                conn.close()
+                
+                print(f"Pedido {order_id} pago e atualizado com sucesso!")
+
+        except Exception as e:
+            print(f"Erro ao processar IPN: {e}")
+            return jsonify({"status": "error"}), 500
+
+    return jsonify({"status": "ok"}), 200
+# --- FIM: Nova Rota para Webhook ---
+
 
 
 # --- Executar a Aplicação ---
