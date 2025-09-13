@@ -17,7 +17,12 @@ from dotenv import load_dotenv
 # --- Configuração ---
 load_dotenv()
 app = Flask(__name__)
-CORS(app)
+origins = [
+    "https://menu-conect-nh3ikb1hm-nelson-nunes-projects-9a130d65.vercel.app",
+    "http://localhost:5173" # Manter para o desenvolvimento local
+]
+
+CORS(app, resources={r"/api/*": {"origins": origins}})
 bcrypt = Bcrypt(app)
 app.config['SECRET_KEY'] = 'esta-e-uma-chave-muito-secreta'
 db_url_str = os.environ.get('JAWSDB_URL')
