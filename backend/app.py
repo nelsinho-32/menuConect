@@ -19,7 +19,8 @@ load_dotenv()
 app = Flask(__name__)
 origins = [
     "https://menu-conect-nh3ikb1hm-nelson-nunes-projects-9a130d65.vercel.app",
-    "https://menu-conect-8im5gqj9j-nelson-nunes-projects-9a130d65.vercel.app", # <-- ADICIONE ESTE NOVO URL
+    "https://menu-conect-8im5gqj9j-nelson-nunes-projects-9a130d65.vercel.app",
+    "https://menu-conect-67iaijs03-nelson-nunes-projects-9a130d65.vercel.app",# <-- ADICIONE ESTE NOVO URL
     "http://localhost:5173" # Manter para o desenvolvimento local
 ]
 
