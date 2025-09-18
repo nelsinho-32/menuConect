@@ -28,6 +28,7 @@ import FriendsChatPanel from './components/FriendsChatPanel.vue';
 import UsersView from './components/views/UsersView.vue';
 import MyListsView from './components/views/MyListsView.vue';
 import ListDetailView from './components/views/ListDetailView.vue'
+import WhatsappMarketingView from './components/views/WhatsappMarketingView.vue';
 
 // Modais
 import ActionModal from './components/ActionModal.vue';
@@ -54,6 +55,7 @@ import SplitBillModal from './components/SplitBillModal.vue';
 import CreateListModal from './components/CreateListModal.vue';
 import TrackOrderModal from './components/TrackOrderModal.vue';
 import AddToListModal from './components/AddToListModal.vue';
+import MediaGalleryModal from './components/MediaGalleryModal.vue';
 
 // 1. IMPORTAÇÃO DAS STORES DO PINIA
 import { useRestaurantStore } from './stores/restaurantStore';
@@ -71,6 +73,8 @@ import { usePromotionStore } from './stores/promotionsStore';
 import { useFriendStore } from './stores/friendStore';
 import { useUsersStore } from './stores/usersStore';
 import { useListStore } from './stores/listStore';
+import { useWhatsappStore } from './stores/whatsappStore';
+import { useMediaStore } from './stores/mediaStore';
 
 // 2. Ativação das stores para usar no componente
 const restaurantStore = useRestaurantStore();
@@ -88,6 +92,8 @@ const promotionStore = usePromotionStore();
 const friendStore = useFriendStore();
 const usersStore = useUsersStore();
 const listStore = useListStore();
+const whatsappStore = useWhatsappStore();
+const mediaStore = useMediaStore();
 
 // --- ESTADO REATIVO (EXISTENTE) ---
 const cart = reactive([]);
@@ -139,6 +145,7 @@ const isTrackOrderModalOpen = ref(false);
 const orderToTrackId = ref(null);
 const isAddToListModalOpen = ref(false);
 const itemToAddToList = ref(null);
+const isGalleryOpen = ref(false);
 // Dados mockados que serão substituídos por dados reais da API
 const allUsers = reactive([]);
 const notifications = reactive([]);
@@ -969,7 +976,7 @@ const handlePaymentSuccess = async () => {
         // para um webhook do Mercado Pago ou para a página de sucesso para garantir
         // que o pedido só seja salvo se o pagamento for confirmado.
         // Por simplicidade aqui, manteremos a criação do pedido antes do redirecionamento.
-        
+
         const finalTotal = cart.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
         const encontroItem = cart.find(item => item.isPlanned && item.encontroPayload);
         let reservationIdParaPedido = null;
@@ -995,7 +1002,7 @@ const handlePaymentSuccess = async () => {
         cart.length = 0;
         closePaymentModal();
         closePixModal();
-        
+
     } catch (errorMsg) {
         showToast(`Erro no pagamento: ${errorMsg}`, 'error');
     }
@@ -1271,6 +1278,7 @@ const closeCustomizeModal = () => {
                     @back="goToView('myLists')"
                     @view-restaurant="restaurant => goToView('restaurantDetail', restaurant)"
                     @open-action-modal="openActionModal" />
+                <WhatsappMarketingView v-if="viewState.name === 'whatsappMarketing'" />
             </main>
 
             <Footer />
@@ -1333,6 +1341,8 @@ const closeCustomizeModal = () => {
             <AddToListModal v-if="isAddToListModalOpen" :item-to-add="itemToAddToList"
                 @close="isAddToListModalOpen = false" @select-list="handleSelectList"
                 @create-list="() => { isAddToListModalOpen = false; isCreateListModalOpen = true; }" />
+            <MediaGalleryModal v-if="isGalleryOpen" @close="isGalleryOpen = false"
+                @imageSelected="(url) => { /* Lógica se precisar aqui */ }" />
             <div
                 :class="['toast-notification fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg', { 'show': isToastVisible }]">
                 {{ toastMessage }}

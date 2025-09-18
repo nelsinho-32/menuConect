@@ -31,6 +31,10 @@ const apiClient = (endpoint, options = {}) => {
     },
   };
 
+  if (config.body instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
+
   return fetch(`${BASE_URL}${endpoint}`, config);
 };
 
